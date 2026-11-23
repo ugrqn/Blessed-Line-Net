@@ -1,0 +1,220 @@
+<Window x:Class="BlessedLine.Desktop.MainWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:shell="clr-namespace:System.Windows.Shell;assembly=PresentationFramework"
+        Title="BlessedLine" Icon="Assets/BlessedLine.ico" Width="568" Height="568"
+        WindowStyle="None" ResizeMode="CanMinimize" WindowStartupLocation="CenterScreen"
+        FontFamily="Tahoma, Segoe UI" FontSize="13" Background="#ECE9D8" Foreground="#173555"
+        Loaded="OnLoaded" Closing="OnClosing">
+    <shell:WindowChrome.WindowChrome>
+        <shell:WindowChrome CaptionHeight="38" ResizeBorderThickness="0" GlassFrameThickness="0" CornerRadius="7" />
+    </shell:WindowChrome.WindowChrome>
+    <Window.Resources>
+        <LinearGradientBrush x:Key="TitleBlue" StartPoint="0,0" EndPoint="0,1">
+            <GradientStop Color="#6BB0FF" Offset="0" />
+            <GradientStop Color="#2465CF" Offset="0.38" />
+            <GradientStop Color="#164896" Offset="1" />
+        </LinearGradientBrush>
+        <Style TargetType="Button">
+            <Setter Property="Padding" Value="10,4" />
+            <Setter Property="MinHeight" Value="28" />
+            <Setter Property="Foreground" Value="#143A64" />
+            <Setter Property="Background">
+                <Setter.Value>
+                    <LinearGradientBrush StartPoint="0,0" EndPoint="0,1">
+                        <GradientStop Color="#FFFFFF" />
+                        <GradientStop Color="#DDEAFB" Offset="1" />
+                    </LinearGradientBrush>
+                </Setter.Value>
+            </Setter>
+            <Setter Property="BorderBrush" Value="#769ACA" />
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="Button">
+                        <Border x:Name="Frame" CornerRadius="5" Background="{TemplateBinding Background}"
+                                BorderBrush="{TemplateBinding BorderBrush}" BorderThickness="1" Padding="{TemplateBinding Padding}">
+                            <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center" RecognizesAccessKey="True" />
+                        </Border>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsMouseOver" Value="True"><Setter TargetName="Frame" Property="BorderBrush" Value="#F2A53F" /></Trigger>
+                            <Trigger Property="IsKeyboardFocused" Value="True"><Setter TargetName="Frame" Property="BorderBrush" Value="#D07817" /></Trigger>
+                            <Trigger Property="IsPressed" Value="True"><Setter TargetName="Frame" Property="Opacity" Value="0.78" /></Trigger>
+                            <Trigger Property="IsEnabled" Value="False"><Setter TargetName="Frame" Property="Opacity" Value="0.48" /></Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+        <Style x:Key="ChromeButton" TargetType="Button" BasedOn="{StaticResource {x:Type Button}}">
+            <Setter Property="Width" Value="28" /><Setter Property="Margin" Value="4,0,0,0" />
+            <Setter Property="Padding" Value="0" /><Setter Property="Background" Value="#286BC8" />
+            <Setter Property="BorderBrush" Value="#A9D2FF" /><Setter Property="Foreground" Value="White" />
+            <Setter Property="shell:WindowChrome.IsHitTestVisibleInChrome" Value="True" />
+        </Style>
+        <Style x:Key="Card" TargetType="Border">
+            <Setter Property="Background" Value="#FFFEF9" /><Setter Property="BorderBrush" Value="#B9C9D7" />
+            <Setter Property="BorderThickness" Value="1" /><Setter Property="CornerRadius" Value="7" />
+        </Style>
+    </Window.Resources>
+
+    <Border BorderBrush="#225DC0" BorderThickness="2" CornerRadius="7">
+        <DockPanel>
+            <Border DockPanel.Dock="Top" Height="38" Background="{StaticResource TitleBlue}" CornerRadius="5,5,0,0">
+                <DockPanel Margin="10,0,6,0">
+                    <StackPanel DockPanel.Dock="Right" Orientation="Horizontal" VerticalAlignment="Center">
+                        <Button x:Name="MiniButton" Style="{StaticResource ChromeButton}" Content="◫" Click="ToggleMini"
+                                ToolTip="Mini panel" AutomationProperties.Name="Mini paneli aç veya kapat" />
+                        <Button Style="{StaticResource ChromeButton}" Content="—" Click="Minimize"
+                                ToolTip="Simge durumuna küçült" AutomationProperties.Name="Simge durumuna küçült" />
+                        <Button Style="{StaticResource ChromeButton}" Background="#C94332" Content="×" Click="CloseWindow"
+                                ToolTip="Kapat" AutomationProperties.Name="BlessedLine’ı kapat" />
+                    </StackPanel>
+                    <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
+                        <Image Source="Assets/BlessedLine.png" Width="26" Height="26" />
+                        <TextBlock Text="BlessedLine" FontSize="16" FontWeight="Bold" Foreground="White" VerticalAlignment="Center" Margin="7,0,0,0" />
+                    </StackPanel>
+                </DockPanel>
+            </Border>
+            <Grid Margin="12,9,12,7">
+                <Grid.RowDefinitions>
+                    <RowDefinition Height="Auto" /><RowDefinition Height="Auto" /><RowDefinition Height="Auto" />
+                    <RowDefinition Height="Auto" /><RowDefinition Height="*" /><RowDefinition Height="Auto" />
+                </Grid.RowDefinitions>
+                <DockPanel x:Name="NetworkPanel" Margin="0,0,0,7">
+                    <Button DockPanel.Dock="Right" Click="OpenSettings" Margin="7,0,0,0">
+                        <StackPanel Orientation="Horizontal"><Image Source="Assets/Ayarlar.png" Width="17" Height="17" Margin="0,0,5,0" /><TextBlock Text="Ayarlar" /></StackPanel>
+                    </Button>
+                    <ComboBox x:Name="Adapters" DockPanel.Dock="Right" MinWidth="108" MaxWidth="165" Height="28"
+                              DisplayMemberPath="Label" SelectionChanged="AdapterChanged" AutomationProperties.Name="Ölçülecek bağlantı" />
+                    <StackPanel VerticalAlignment="Center">
+                        <TextBlock Text="BAĞLANTI" FontSize="10" FontWeight="Bold" Foreground="#536477" />
+                        <TextBlock x:Name="NetworkStatus" Text="Ağ aranıyor…" FontWeight="Bold" TextTrimming="CharacterEllipsis" />
+                    </StackPanel>
+                </DockPanel>
+
+                <Border x:Name="RatesPanel" Grid.Row="1" Style="{StaticResource Card}" Margin="0,0,0,7">
+                    <Grid Margin="9,6">
+                        <Grid.ColumnDefinitions><ColumnDefinition /><ColumnDefinition /></Grid.ColumnDefinitions>
+                        <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
+                            <Image Source="Assets/Indirme.png" Width="26" Height="26" Margin="0,0,6,0" />
+                            <StackPanel><TextBlock Text="İndirme" FontSize="10" /><TextBlock x:Name="DownloadRate" Text="—" FontWeight="Bold" FontSize="17" /></StackPanel>
+                        </StackPanel>
+                        <StackPanel Grid.Column="1" Orientation="Horizontal" VerticalAlignment="Center" Margin="7,0,0,0">
+                            <Image Source="Assets/Yukleme.png" Width="26" Height="26" Margin="0,0,6,0" />
+                            <StackPanel><TextBlock Text="Yükleme" FontSize="10" /><TextBlock x:Name="UploadRate" Text="—" FontWeight="Bold" FontSize="17" /></StackPanel>
+                        </StackPanel>
+                    </Grid>
+                </Border>
+
+                <Border x:Name="QuotaPanel" Grid.Row="2" Style="{StaticResource Card}" Padding="9,7" Margin="0,0,0,7">
+                    <Grid>
+                        <Grid.RowDefinitions><RowDefinition Height="Auto" /><RowDefinition Height="30" /><RowDefinition Height="Auto" /></Grid.RowDefinitions>
+                        <DockPanel>
+                            <TextBlock x:Name="QuotaPercent" DockPanel.Dock="Right" FontWeight="Bold" Foreground="#B42B28" />
+                            <TextBlock x:Name="QuotaText" FontWeight="Bold" Text="Toplam harcanan · 0 B" />
+                        </DockPanel>
+                        <Grid Grid.Row="1" Margin="0,2">
+                            <Border Background="#E4ECF5" CornerRadius="5" VerticalAlignment="Center" Height="10" Margin="0,0,16,0" />
+                            <Canvas x:Name="WallTrack" ClipToBounds="True" SizeChanged="TrackResized" Margin="0,0,15,0" IsHitTestVisible="False">
+                                <Border x:Name="TrackFill" Canvas.Top="10" Height="8" CornerRadius="4" Background="#69A7EC" />
+                                <Viewbox x:Name="WifiMarker" Width="26" Height="24" Canvas.Top="1">
+                                    <Grid Width="30" Height="24">
+                                        <Path Stroke="#1557B1" StrokeThickness="2.8" StrokeStartLineCap="Round" StrokeEndLineCap="Round"
+                                              Data="M 2,8 Q 15,-3 28,8 M 6,13 Q 15,5 24,13 M 10,17 Q 15,13 20,17" />
+                                        <Ellipse Width="4" Height="4" Fill="#1557B1" Margin="0,0,0,1" HorizontalAlignment="Center" VerticalAlignment="Bottom" />
+                                    </Grid>
+                                </Viewbox>
+                            </Canvas>
+                            <Border x:Name="QuotaWall" HorizontalAlignment="Right" Width="16" CornerRadius="3" Background="#A92422">
+                                <UniformGrid Columns="1" Rows="3" Margin="2">
+                                    <Border Margin="0,0,2,1" CornerRadius="1" Background="#FF7960" />
+                                    <Border Margin="2,0,0,1" CornerRadius="1" Background="#F5513E" />
+                                    <Border Margin="0,0,2,0" CornerRadius="1" Background="#FF7960" />
+                                </UniformGrid>
+                            </Border>
+                        </Grid>
+                        <DockPanel Grid.Row="2">
+                            <Button x:Name="RestoreButton" DockPanel.Dock="Right" Click="RestoreConnection" Visibility="Collapsed" Padding="6,2">
+                                <StackPanel Orientation="Horizontal"><Image Source="Assets/Engeli_Kaldir.png" Width="16" Height="16" Margin="0,0,4,0" /><TextBlock Text="Bağlantıyı geri aç" /></StackPanel>
+                            </Button>
+                            <TextBlock x:Name="QuotaHint" Text="Limit belirlenmedi" FontSize="11" Foreground="#536477" VerticalAlignment="Center" TextWrapping="Wrap" />
+                        </DockPanel>
+                    </Grid>
+                </Border>
+
+                <Grid x:Name="CounterPanel" Grid.Row="3" Margin="0,0,0,7">
+                    <Grid.RowDefinitions><RowDefinition Height="Auto" /><RowDefinition Height="Auto" /></Grid.RowDefinitions>
+                    <DockPanel Margin="0,0,0,4">
+                        <Button DockPanel.Dock="Right" Click="NewCounter" Margin="4,0,0,0">
+                            <StackPanel Orientation="Horizontal"><Image Source="Assets/Sayac_Baslat.png" Width="16" Height="16" Margin="0,0,4,0" /><TextBlock Text="Yeni" /></StackPanel>
+                        </Button>
+                        <Button x:Name="PauseButton" DockPanel.Dock="Right" Content="Duraklat" Click="PauseCounter" Margin="4,0,0,0" />
+                        <Button DockPanel.Dock="Right" Content="Sıfırla" Click="ResetCounter" Margin="4,0,0,0" />
+                        <ComboBox x:Name="Counters" DisplayMemberPath="Name" Height="28" SelectionChanged="CounterChanged" AutomationProperties.Name="Sayaç" />
+                    </DockPanel>
+                    <DockPanel Grid.Row="1" LastChildFill="False">
+                        <TextBlock Text="Limit (MB)" VerticalAlignment="Center" Margin="0,0,6,0" />
+                        <TextBox x:Name="LimitInput" Width="72" MaxLength="16" VerticalContentAlignment="Center" AutomationProperties.Name="Veri limiti, MB" />
+                        <Button Content="Uygula" Click="SetLimit" Margin="4,0,0,0" />
+                        <Button x:Name="ExtendButton" Content="+100 MB" Click="ExtendLimit" Margin="4,0,0,0" />
+                        <CheckBox x:Name="BlockCheck" Content="Limitte bağlantıyı kes" Margin="9,0,0,0" VerticalAlignment="Center"
+                                  Checked="ArmBlock" Unchecked="DisarmBlock" ToolTip="Seçili bağlantının internet ve yerel ağ trafiğini geçici olarak keser." />
+                    </DockPanel>
+                </Grid>
+
+                <Grid Grid.Row="4">
+                    <Grid.RowDefinitions><RowDefinition Height="Auto" /><RowDefinition Height="*" /></Grid.RowDefinitions>
+                    <DockPanel Margin="0,0,0,5">
+                        <Button x:Name="DetailsButton" Click="ToggleDetails">
+                            <StackPanel Orientation="Horizontal">
+                                <Image Source="Assets/Uygulamalar.png" Width="18" Height="18" Margin="0,0,6,0" />
+                                <TextBlock x:Name="DetailsLabel" Text="Uygulama detayları ▾" />
+                            </StackPanel>
+                        </Button>
+                        <Button x:Name="AuthorizeButton" DockPanel.Dock="Right" Content="Ölçümü aç" Click="Authorize" Margin="5,0,0,0" Visibility="Collapsed" />
+                        <TextBlock x:Name="DetailStatus" Margin="7,0,0,0" FontSize="10" VerticalAlignment="Center" TextWrapping="Wrap" />
+                    </DockPanel>
+                    <DataGrid x:Name="Applications" Grid.Row="1" AutoGenerateColumns="False" IsReadOnly="True"
+                              CanUserAddRows="False" CanUserReorderColumns="False" HeadersVisibility="Column" RowHeight="27"
+                              EnableRowVirtualization="True" GridLinesVisibility="None" AlternatingRowBackground="#EDF4FF"
+                              Background="#FFFEF9" BorderBrush="#B9C9D7" Visibility="Collapsed">
+                        <DataGrid.Columns>
+                            <DataGridTemplateColumn Header="Uygulama" Width="*" SortMemberPath="Name">
+                                <DataGridTemplateColumn.CellTemplate>
+                                    <DataTemplate>
+                                        <StackPanel Orientation="Horizontal" ToolTip="{Binding Details}">
+                                            <Image Source="{Binding Icon}" Width="18" Height="18" Margin="2,0,5,0" />
+                                            <TextBlock Text="{Binding Name}" VerticalAlignment="Center" TextTrimming="CharacterEllipsis" />
+                                        </StackPanel>
+                                    </DataTemplate>
+                                </DataGridTemplateColumn.CellTemplate>
+                            </DataGridTemplateColumn>
+                            <DataGridTextColumn Header="↓ İndirme/sn" Binding="{Binding DownloadRateText}" SortMemberPath="DownloadRate" Width="85" />
+                            <DataGridTextColumn Header="↑ Yükleme/sn" Binding="{Binding UploadRateText}" SortMemberPath="UploadRate" Width="85" />
+                            <DataGridTextColumn Header="Harcanan" Binding="{Binding TotalText}" SortMemberPath="Total" Width="78" />
+                        </DataGrid.Columns>
+                    </DataGrid>
+                </Grid>
+
+                <TextBlock x:Name="Feedback" Grid.Row="5" Margin="1,4,1,0" Foreground="#375474" FontSize="11" TextWrapping="Wrap" />
+                <Popup x:Name="SettingsPopup" PlacementTarget="{Binding ElementName=NetworkPanel}" Placement="Bottom"
+                       StaysOpen="False" AllowsTransparency="True">
+                    <Border Style="{StaticResource Card}" Padding="11" Background="#FFFBEF">
+                        <StackPanel>
+                            <TextBlock Text="Görünüm ve uyarı sesi" FontWeight="Bold" Margin="0,0,0,7" />
+                            <CheckBox x:Name="PinDetails" Content="Ana panelde detayları açık tut" Click="RememberDetails" Margin="0,0,0,4" />
+                            <CheckBox x:Name="PinMiniDetails" Content="Mini panelde detayları açık tut" Click="RememberDetails" Margin="0,0,0,9" />
+                            <DockPanel>
+                                <Button DockPanel.Dock="Right" Content="Dinle" Click="PreviewSound" Margin="5,0,0,0" />
+                                <ComboBox x:Name="Sounds" SelectionChanged="SoundChanged" AutomationProperties.Name="Uyarı sesi">
+                                    <ComboBoxItem Content="Normal bildirim" /><ComboBoxItem Content="Yumuşak melodi" /><ComboBoxItem Content="Sert uyarı" />
+                                </ComboBox>
+                            </DockPanel>
+                            <Button Content="Seçili sayacı sil" Click="DeleteCounter" HorizontalAlignment="Left" Margin="0,8,0,0" />
+                        </StackPanel>
+                    </Border>
+                </Popup>
+            </Grid>
+        </DockPanel>
+    </Border>
+</Window>

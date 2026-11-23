@@ -1,4 +1,4 @@
-namespace RetroNet.Core;
+namespace BlessedLine.Core;
 
 public enum TrafficDirection { Download, Upload, Both }
 public enum CounterState { Running, Paused }

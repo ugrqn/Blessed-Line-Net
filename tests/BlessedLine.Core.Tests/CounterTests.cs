@@ -1,7 +1,7 @@
-using RetroNet.Core;
+using BlessedLine.Core;
 using Xunit;
 
-namespace RetroNet.Core.Tests;
+namespace BlessedLine.Core.Tests;
 
 public class CounterTests
 {

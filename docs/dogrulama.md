@@ -1,5 +1,15 @@
 # Doğrulama kaydı
 
+## BlessedLine 0.2.0
+
+Debian x64 ve .NET SDK 10.0.404 ile Release çözüm derlemesi 0 uyarı ve 0 hatayla tamamlandı. 15 xUnit testi geçti. Testler kota eşiğini, tek limit bildirimini, kota uzatmayı, duraklatmayı, Türkçe veri birimlerini, monotonik ölçüm aralıklarını, bağdaştırıcı değişiminde referans yenilemeyi ve duvara yaklaşan kullanım göstergesinin sınırlarını kapsar.
+
+`dotnet publish` ile çalışma zamanı içeren `win-x64` yayın üretildi. `BlessedLine.exe`, x64 Windows GUI yürütülebilir dosyası olarak doğrulandı. Windows’ta açılış, DPI, gerçek ETW atfı, ses çıkışı ve WFP bağlantı kesme/kurtarma henüz doğrulanmadı. [Windows kontrol listesi](windows-kontrol.md) bu senaryoları içerir. Uygulama ve filtreleme uygulama süreciyle sınırlıdır. Kurucu kaynağı güncellendi, kurucu derlenmedi.
+
+7z arşivi bütünlük testinden geçti. İndirilen arşiv 44.709.485 bayt, açılmış dosyalar 153.502.667 bayttır. Arşivin SHA-256 değeri `4b9a6d6089f0b6ffff0b5435d79c2c5ca6d1d4e6e6b681536a0f142f29f135b3` olarak ölçüldü.
+
+## RetroNet Control 0.1.0
+
 2026-11-23, Debian 13 x64. .NET SDK 10.0.404 yerel `/tmp/retronet-dotnet` konumuna kuruldu. Başlangıçta sistem `dotnet` komutu yoktu.
 
 | İşlem | Sonuç |

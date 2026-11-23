@@ -4,6 +4,6 @@
     <PackageReference Include="Microsoft.NET.Test.Sdk" Version="17.14.1" />
     <PackageReference Include="xunit" Version="2.9.3" />
     <PackageReference Include="xunit.runner.visualstudio" Version="3.1.4" />
-    <ProjectReference Include="../../src/RetroNet.Core/RetroNet.Core.csproj" />
+    <ProjectReference Include="../../src/BlessedLine.Core/BlessedLine.Core.csproj" />
   </ItemGroup>
 </Project>
