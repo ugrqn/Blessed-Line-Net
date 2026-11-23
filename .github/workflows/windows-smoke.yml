@@ -1,0 +1,57 @@
+name: BlessedLine Windows smoke test
+on:
+  push:
+    branches: [validation/windows-preview]
+permissions:
+  contents: read
+jobs:
+  windows:
+    runs-on: windows-2025
+    timeout-minutes: 12
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 10.0.404
+      - name: Build and test
+        run: |
+          dotnet build BlessedLine.slnx -c Release
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          dotnet test BlessedLine.slnx -c Release --no-build
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+      - name: Start the WPF application and exercise the mini panel
+        shell: pwsh
+        run: |
+          Add-Type -AssemblyName UIAutomationClient, UIAutomationTypes
+          $e = [System.Windows.Automation.AutomationElement]
+          $p = Start-Process -FilePath './src/BlessedLine.Desktop/bin/Release/net10.0-windows/BlessedLine.exe' -PassThru
+          try {
+              for ($i = 0; $i -lt 30; $i++) {
+                  Start-Sleep -Milliseconds 500
+                  $p.Refresh()
+                  if ($p.HasExited) { throw "Application exited on startup with code $($p.ExitCode)." }
+                  if ($p.MainWindowHandle -ne 0) { break }
+              }
+              if ($p.MainWindowHandle -eq 0) { throw 'BlessedLine window did not appear.' }
+              $window = $e::FromHandle($p.MainWindowHandle)
+              $main = $window.Current.BoundingRectangle
+              if ([Math]::Abs($main.Width - $main.Height) -gt 12) { throw "Expected a square main panel, got $main." }
+              $condition = [System.Windows.Automation.PropertyCondition]::new($e::AutomationIdProperty, 'MiniButton')
+              $mini = $window.FindFirst([System.Windows.Automation.TreeScope]::Descendants, $condition)
+              if ($null -eq $mini) { throw 'Mini button not found.' }
+              $invoke = [System.Windows.Automation.InvokePattern]::Pattern
+              $mini.GetCurrentPattern($invoke).Invoke()
+              Start-Sleep -Milliseconds 700
+              $compact = $window.Current.BoundingRectangle
+              if ($compact.Width -ge $main.Width -or $compact.Height -ge $main.Height) { throw "Mini panel did not shrink, got $compact." }
+              $mini.GetCurrentPattern($invoke).Invoke()
+              Start-Sleep -Milliseconds 700
+              $restored = $window.Current.BoundingRectangle
+              if ([Math]::Abs($restored.Width - $main.Width) -gt 12) { throw 'Main panel did not return to the original width.' }
+              Write-Host "BlessedLine opened and switched from $main to $compact and back."
+          } finally {
+              if (-not $p.HasExited) {
+                  $null = $p.CloseMainWindow()
+                  if (-not $p.WaitForExit(5000)) { $p.Kill() }
+              }
+          }
