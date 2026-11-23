@@ -1,0 +1,10 @@
+# Derleme ve test çıktıları
+**/bin/
+**/obj/
+TestResults/
+artifacts/
+
+# Yerel IDE ayarları
+.vs/
+*.user
+*.suo

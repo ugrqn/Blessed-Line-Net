@@ -1,0 +1,9 @@
+<Solution>
+  <Folder Name="/src/">
+    <Project Path="src/RetroNet.Core/RetroNet.Core.csproj" />
+    <Project Path="src/RetroNet.Desktop/RetroNet.Desktop.csproj" />
+  </Folder>
+  <Folder Name="/tests/">
+    <Project Path="tests/RetroNet.Core.Tests/RetroNet.Core.Tests.csproj" />
+  </Folder>
+</Solution>
