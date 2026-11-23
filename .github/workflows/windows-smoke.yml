@@ -55,3 +55,83 @@ jobs:
                   if (-not $p.WaitForExit(5000)) { $p.Kill() }
               }
           }
+      - name: Attribute real Windows downloads to two applications
+        shell: pwsh
+        run: |
+          $identity = [System.Security.Principal.WindowsIdentity]::GetCurrent()
+          $principal = [System.Security.Principal.WindowsPrincipal]::new($identity)
+          if (-not $principal.IsInRole([System.Security.Principal.WindowsBuiltInRole]::Administrator)) {
+              throw 'This runner is not elevated. ETW could not be exercised.'
+          }
+          Add-Type -AssemblyName UIAutomationClient, UIAutomationTypes
+          $element = [System.Windows.Automation.AutomationElement]
+          $scope = [System.Windows.Automation.TreeScope]::Descendants
+          $invoke = [System.Windows.Automation.InvokePattern]::Pattern
+          function ById($parent, $id) {
+              $condition = [System.Windows.Automation.PropertyCondition]::new($element::AutomationIdProperty, $id)
+              $parent.FindFirst($scope, $condition)
+          }
+          function VisibleNames($grid) {
+              $names = @()
+              $scroll = $null
+              $pattern = [System.Windows.Automation.ScrollPattern]::Pattern
+              if ($grid.TryGetCurrentPattern($pattern, [ref]$scroll) -and $scroll.Current.VerticallyScrollable) {
+                  $positions = @(0, 25, 50, 75, 100)
+              } else {
+                  $positions = @(-1)
+              }
+              foreach ($position in $positions) {
+                  if ($position -ge 0) {
+                      $scroll.SetScrollPercent(-1, $position)
+                      Start-Sleep -Milliseconds 200
+                  }
+                  $names += $grid.FindAll($scope, [System.Windows.Automation.Condition]::TrueCondition) |
+                      ForEach-Object { $_.Current.Name }
+              }
+              $names
+          }
+
+          $p = Start-Process -FilePath './src/BlessedLine.Desktop/bin/Release/net10.0-windows/BlessedLine.exe' -PassThru
+          $curl = $null
+          try {
+              for ($i = 0; $i -lt 30; $i++) {
+                  Start-Sleep -Milliseconds 500
+                  $p.Refresh()
+                  if ($p.HasExited) { throw "BlessedLine exited with code $($p.ExitCode)." }
+                  if ($p.MainWindowHandle -ne 0) { break }
+              }
+              if ($p.MainWindowHandle -eq 0) { throw 'BlessedLine window did not appear.' }
+              $window = $element::FromHandle($p.MainWindowHandle)
+              (ById $window 'DetailsButton').GetCurrentPattern($invoke).Invoke()
+              Start-Sleep -Seconds 2
+              $status = (ById $window 'DetailStatus').Current.Name
+              Write-Host "Application measurement status: $status"
+              if ($status -notlike 'Uygulama ölçümü açık*') { throw "ETW was not running: $status" }
+
+              $uri = 'https://raw.githubusercontent.com/microsoft/win32metadata/main/generation/WinSDK/RecompiledIdlHeaders/um/fwpmu.h'
+              $curl = Start-Process curl.exe -ArgumentList @('--silent','--fail','--limit-rate','8k','--max-time','45','--output','blessed-curl-download.tmp',$uri) -PassThru
+              $web = Invoke-WebRequest -Uri $uri
+              if ($web.RawContentLength -lt 10000) { throw 'The PowerShell process did not download the fixture.' }
+              $grid = ById $window 'Applications'
+              if ($null -eq $grid) { throw 'Application details grid did not appear.' }
+
+              for ($i = 0; $i -lt 15; $i++) {
+                  Start-Sleep -Seconds 1
+                  $names = @(VisibleNames $grid)
+                  if ($names -contains 'curl' -and $names -contains 'pwsh') { break }
+              }
+              Write-Host ('Application table names and values: ' + (($names | Where-Object { $_ }) -join ' | '))
+              if ($names -notcontains 'curl' -or $names -notcontains 'pwsh') {
+                  throw 'The applications table did not show both download processes.'
+              }
+              if (-not ($names | Where-Object { $_ -match '^[1-9].* KB$' })) {
+                  throw 'No nonzero KB-scale rate or transfer total was visible.'
+              }
+              Write-Host 'Real TCP traffic was attributed to curl and PowerShell.'
+          } finally {
+              if ($curl -and -not $curl.HasExited) { $curl.Kill() }
+              if (-not $p.HasExited) {
+                  $null = $p.CloseMainWindow()
+                  if (-not $p.WaitForExit(5000)) { $p.Kill() }
+              }
+          }
