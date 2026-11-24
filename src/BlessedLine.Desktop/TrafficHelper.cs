@@ -103,7 +103,7 @@ internal sealed class TrafficHelper(bool captureTraffic) : IDisposable
                 var reply = new TaskCompletionSource<PolicyResponse>(TaskCreationOptions.RunContinuationsAsynchronously);
                 _reply = reply;
                 await writer.WriteLineAsync(JsonSerializer.Serialize(new PolicyCommand(number, request))).ConfigureAwait(false);
-                var response = await reply.Task.WaitAsync(TimeSpan.FromSeconds(28), _stop.Token).ConfigureAwait(false);
+                var response = await reply.Task.WaitAsync(TimeSpan.FromSeconds(45), _stop.Token).ConfigureAwait(false);
                 return response.Id == number ? response.Result : new(false, "HelperUnavailable");
             }
             finally { _reply = null; _requests.Release(); }

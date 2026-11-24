@@ -3,10 +3,9 @@ using System.ComponentModel;
 using System.Diagnostics;
 using System.Globalization;
 using System.IO;
-using System.Reflection;
-using System.Runtime.InteropServices;
 using System.Security.Cryptography;
 using System.Text;
+using System.Xml.Linq;
 
 namespace BlessedLine.Desktop;
 
@@ -69,162 +68,71 @@ internal static class ApplicationPolicy
             switch (request.Operation)
             {
                 case PolicyOperation.Block:
-                    SetBlock(request.Path!, request.Value != 0);
+                    await SetBlockAsync(request.Path!, request.Value != 0).ConfigureAwait(false);
                     break;
                 case PolicyOperation.Upload:
                     await SetUploadAsync(NameFor(request.Path!), request.Path!, request.Value).ConfigureAwait(false);
                     break;
                 case PolicyOperation.ClearAll:
+                    await ClearAllBlocksAsync().ConfigureAwait(false);
                     var qosError = await TryClearAllUploadAsync().ConfigureAwait(false);
-                    ClearAllBlocks();
                     if (qosError is not null) return new(false, qosError, FirewallCleared: true);
                     break;
             }
             return new(true);
         }
-        catch (Exception ex) when (ex is COMException or Win32Exception or UnauthorizedAccessException or IOException or
-                                   InvalidOperationException or NotSupportedException or TargetInvocationException or
-                                   Microsoft.CSharp.RuntimeBinder.RuntimeBinderException)
+        catch (Exception ex) when (ex is Win32Exception or UnauthorizedAccessException or IOException or
+                                   InvalidOperationException or NotSupportedException)
         {
-            var cause = ex is TargetInvocationException { InnerException: { } inner } ? inner : ex;
-            Debug.WriteLine(cause);
-            return new(false, cause.Message);
+            Debug.WriteLine(ex);
+            return new(false, ex.Message);
         }
     }
 
-    private static object Activate(string progId) => Activator.CreateInstance(Type.GetTypeFromProgID(progId, throwOnError: true)!)
-        ?? throw new InvalidOperationException(progId);
-
-    private static void SetBlock(string path, bool block)
+    private static Task SetBlockAsync(string path, bool block)
     {
         var id = NameFor(path);
-        object policy = Activate("HNetCfg.FwPolicy2");
-        object? rules = null;
-        try
-        {
-            rules = ((dynamic)policy).Rules;
-            var outName = id + ".Out";
-            var inName = id + ".In";
-            if (!block)
-            {
-                RemoveRule(rules, inName);
-                RemoveRule(rules, outName);
-                return;
-            }
-            var newOutbound = false;
-            try
-            {
-                newOutbound = AddRule(rules, outName, path, 2);
-                AddRule(rules, inName, path, 1);
-            }
-            catch
-            {
-                if (newOutbound) RemoveRule(rules, outName);
-                throw;
-            }
-        }
-        finally
-        {
-            if (rules is not null) Marshal.ReleaseComObject(rules);
-            Marshal.ReleaseComObject(policy);
-        }
+        var query = $"$names = '{id}.Out', '{id}.In'; " +
+            "$rules = @(Get-NetFirewallRule -PolicyStore PersistentStore -Name $names -ErrorAction SilentlyContinue " +
+            $"| Where-Object Group -eq '{Group}'); ";
+        if (!block)
+            return PowerShellAsync("NetSecurity", query + "$rules | Remove-NetFirewallRule -Confirm:$false");
+
+        var encodedPath = Convert.ToBase64String(Encoding.Unicode.GetBytes(path));
+        var change = $"$app = [Text.Encoding]::Unicode.GetString([Convert]::FromBase64String('{encodedPath}')); " +
+            "$created = @(); try { foreach ($i in 0, 1) { $name = $names[$i]; " +
+            "if ($rules.Name -contains $name) { continue }; $direction = @('Outbound', 'Inbound')[$i]; " +
+            $"$created += New-NetFirewallRule -PolicyStore PersistentStore -Name $name -DisplayName $name -Group '{Group}' " +
+            "-Program $app -Direction $direction -Action Block -Profile Any -RemoteAddress Internet } } " +
+            "catch { $created | Remove-NetFirewallRule -Confirm:$false -ErrorAction SilentlyContinue; throw }";
+        return PowerShellAsync("NetSecurity", query + change);
     }
 
-    private static bool AddRule(object rules, string name, string path, int direction)
-    {
-        if (RuleExists(rules, name)) return false;
-        object rule = Activate("HNetCfg.FWRule");
-        try
-        {
-            dynamic settings = rule;
-            settings.Name = name;
-            settings.Grouping = Group;
-            settings.ApplicationName = path;
-            settings.Direction = direction;
-            settings.Protocol = 256; // NET_FW_IP_PROTOCOL_ANY
-            settings.RemoteAddresses = "Internet";
-            settings.Action = 0; // NET_FW_ACTION_BLOCK
-            settings.Profiles = 7; // domain, private, public
-            settings.Enabled = true;
-            ((dynamic)rules).Add(rule);
-            return true;
-        }
-        catch (Exception ex) when (ex is COMException or TargetInvocationException)
-        {
-            var cause = ex is TargetInvocationException { InnerException: { } inner } ? inner : ex;
-            throw new InvalidOperationException($"Windows Firewall: {cause.Message}", cause);
-        }
-        finally { Marshal.ReleaseComObject(rule); }
-    }
-
-    private static bool RuleExists(object rules, string name)
-    {
-        try
-        {
-            object rule = ((dynamic)rules).Item(name);
-            Marshal.ReleaseComObject(rule);
-            return true;
-        }
-        catch (Exception ex) when (IsMissingRule(ex)) { return false; }
-    }
-
-    private static bool IsMissingRule(Exception error) =>
-        (error is TargetInvocationException { InnerException: { } inner } ? inner : error).HResult == unchecked((int)0x80070002);
-
-    private static void RemoveRule(object rules, string name)
-    {
-        if (RuleExists(rules, name)) ((dynamic)rules).Remove(name);
-    }
-
-    private static void ClearAllBlocks()
-    {
-        object policy = Activate("HNetCfg.FwPolicy2");
-        object? rules = null;
-        try
-        {
-            rules = ((dynamic)policy).Rules;
-            var names = new List<string>();
-            foreach (object rule in (System.Collections.IEnumerable)rules)
-            {
-                try
-                {
-                    dynamic item = rule;
-                    string name = item.Name;
-                    if ((string)item.Grouping == Group && name.StartsWith(Group + ".", StringComparison.Ordinal))
-                        names.Add(name);
-                }
-                finally { Marshal.ReleaseComObject(rule); }
-            }
-            foreach (var name in names) RemoveRule(rules, name);
-        }
-        finally
-        {
-            if (rules is not null) Marshal.ReleaseComObject(rules);
-            Marshal.ReleaseComObject(policy);
-        }
-    }
+    private static Task ClearAllBlocksAsync() => PowerShellAsync("NetSecurity",
+        $"Get-NetFirewallRule -PolicyStore PersistentStore -Group '{Group}' -ErrorAction SilentlyContinue " +
+        "| Where-Object { $_.Name -match '^BlessedLine\\.AppControls\\.[0-9A-F]{24}\\.(Out|In)$' } " +
+        "| Remove-NetFirewallRule -Confirm:$false");
 
     private static async Task SetUploadAsync(string name, string path, long kbps)
     {
         var ruleName = Quote(name);
         var pathBase64 = Convert.ToBase64String(Encoding.Unicode.GetBytes(path));
         var rate = (kbps * 1000).ToString(CultureInfo.InvariantCulture);
-        var query = $"Import-Module -Name $qosModule; $app = [Text.Encoding]::Unicode.GetString([Convert]::FromBase64String('{pathBase64}')); " +
+        var query = $"$app = [Text.Encoding]::Unicode.GetString([Convert]::FromBase64String('{pathBase64}')); " +
             $"$q = Get-NetQosPolicy -Name {ruleName} -ErrorAction SilentlyContinue;";
         var command = kbps == 0
             ? $"if ($q) {{ Remove-NetQosPolicy -Name {ruleName} -Confirm:$false }}"
             : $"if ($q) {{ Set-NetQosPolicy -Name {ruleName} -AppPathNameMatchCondition $app -ThrottleRateActionBitsPerSecond {rate} -Confirm:$false }} " +
               $"else {{ New-NetQosPolicy -Name {ruleName} -AppPathNameMatchCondition $app -ThrottleRateActionBitsPerSecond {rate} | Out-Null }}";
-        await PowerShellAsync(query + command).ConfigureAwait(false);
+        await PowerShellAsync("NetQos", query + command).ConfigureAwait(false);
     }
 
     private static async Task<string?> TryClearAllUploadAsync()
     {
         try
         {
-            await PowerShellAsync("if ([IO.File]::Exists($qosModule)) { Import-Module -Name $qosModule; " +
-                $"Get-NetQosPolicy | Where-Object {{ $_.Name -match '^BlessedLine\\.AppControls\\.[0-9A-F]{{24}}$' }} " +
-                "| ForEach-Object { Remove-NetQosPolicy -Name $_.Name -Confirm:$false }}").ConfigureAwait(false);
+            await PowerShellAsync("NetQos", "Get-NetQosPolicy | Where-Object { $_.Name -match '^BlessedLine\\.AppControls\\.[0-9A-F]{24}$' } " +
+                "| ForEach-Object { Remove-NetQosPolicy -Name $_.Name -Confirm:$false }", optional: true).ConfigureAwait(false);
             return null;
         }
         catch (Exception ex) when (ex is Win32Exception or InvalidOperationException or IOException)
@@ -236,17 +144,19 @@ internal static class ApplicationPolicy
 
     private static string Quote(string value) => "'" + value.Replace("'", "''") + "'";
 
-    private static async Task PowerShellAsync(string script)
+    private static async Task PowerShellAsync(string module, string script, bool optional = false)
     {
         var windows = Environment.GetFolderPath(Environment.SpecialFolder.Windows);
         var native = Environment.Is64BitOperatingSystem && !Environment.Is64BitProcess ? "Sysnative" : "System32";
         var executable = Path.Combine(windows, native, "WindowsPowerShell", "v1.0", "powershell.exe");
         var modules = Path.Combine(windows, "System32", "WindowsPowerShell", "v1.0", "Modules");
         var modules64 = Convert.ToBase64String(Encoding.Unicode.GetBytes(modules));
+        var missing = optional ? "if (![IO.File]::Exists($module)) { exit 0 }; " : "";
         var encoded = Convert.ToBase64String(Encoding.Unicode.GetBytes(
             "$ErrorActionPreference = 'Stop'; $ProgressPreference = 'SilentlyContinue'; $PSModuleAutoLoadingPreference = 'None'; " +
             $"$env:PSModulePath = [Text.Encoding]::Unicode.GetString([Convert]::FromBase64String('{modules64}')); " +
-            "$qosModule = [IO.Path]::Combine($env:PSModulePath, 'NetQos', 'NetQos.psd1'); " + script));
+            $"$module = [IO.Path]::Combine($env:PSModulePath, '{module}', '{module}.psd1'); " +
+            missing + "Import-Module -Name $module; " + script));
         var start = new ProcessStartInfo(executable, $"-NoLogo -NoProfile -NonInteractive -EncodedCommand {encoded}")
         {
             UseShellExecute = false,
@@ -271,10 +181,21 @@ internal static class ApplicationPolicy
         var standardError = await error.ConfigureAwait(false);
         if (process.ExitCode != 0)
         {
-            // Encoded-command diagnostics may use CLIXML. Keep status feedback bounded.
-            var message = standardError.StartsWith("#< CLIXML", StringComparison.Ordinal)
-                ? "Windows NetQoS" : standardError.Trim();
+            var message = ReadPowerShellError(standardError, module);
             throw new InvalidOperationException(message.Length > 200 ? message[..200] : message);
         }
+    }
+
+    private static string ReadPowerShellError(string diagnostic, string module)
+    {
+        if (!diagnostic.StartsWith("#< CLIXML", StringComparison.Ordinal))
+            return string.IsNullOrWhiteSpace(diagnostic) ? $"Windows {module}" : diagnostic.Trim();
+        try
+        {
+            return XDocument.Parse(diagnostic["#< CLIXML".Length..].Trim())
+                .Descendants().FirstOrDefault(item => item.Name.LocalName == "S" && (string?)item.Attribute("S") == "Error")?
+                .Value.Replace("_x000D__x000A_", " ").Trim() ?? $"Windows {module}";
+        }
+        catch (System.Xml.XmlException) { return $"Windows {module}"; }
     }
 }
