@@ -9,6 +9,7 @@
     <AssemblyName>BlessedLine</AssemblyName>
     <RootNamespace>BlessedLine.Desktop</RootNamespace>
     <UseWindowsForms>true</UseWindowsForms>
+    <SatelliteResourceLanguages>tr</SatelliteResourceLanguages>
     <Product>BlessedLine</Product>
     <Version>0.3.0</Version>
   </PropertyGroup>

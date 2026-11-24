@@ -27,9 +27,16 @@ public partial class App : Application
 
         if (!_ownsInstance)
         {
-            if (EventWaitHandle.TryOpenExisting(@"Local\BlessedLine.Restore", out var signal))
+            try
             {
-                using (signal) signal.Set();
+                if (EventWaitHandle.TryOpenExisting(@"Local\BlessedLine.Restore", out var signal))
+                {
+                    using (signal) signal.Set();
+                }
+            }
+            catch (UnauthorizedAccessException)
+            {
+                MessageBox.Show("BlessedLine açık. Bildirim alanındaki simgeye çift tıklayın.", "BlessedLine");
             }
             Shutdown();
             return;

@@ -46,7 +46,7 @@ internal static class ApplicationIcon
         [PreserveSig] int GetImage(PixelSize size, uint flags, out nint bitmap);
     }
 
-    [DllImport("shell32.dll", CharSet = CharSet.Unicode)]
+    [DllImport("shell32.dll", CharSet = CharSet.Unicode, ExactSpelling = true)]
     private static extern int SHCreateItemFromParsingName(string name, nint bind, ref Guid iid, out IImageFactory factory);
 
     [DllImport("gdi32.dll")]

@@ -66,7 +66,7 @@ jobs:
               Start-Sleep -Milliseconds 500
               $theme = $e::RootElement.FindFirst([System.Windows.Automation.TreeScope]::Descendants, [System.Windows.Automation.PropertyCondition]::new($e::AutomationIdProperty, 'ThemeList'))
               $theme.GetCurrentPattern([System.Windows.Automation.ExpandCollapsePattern]::Pattern).Expand()
-              $aero = $e::RootElement.FindFirst([System.Windows.Automation.TreeScope]::Descendants, [System.Windows.Automation.PropertyCondition]::new($e::NameProperty,'Windows 7 Aero'))
+              $aero = $e::RootElement.FindFirst([System.Windows.Automation.TreeScope]::Descendants, [System.Windows.Automation.PropertyCondition]::new($e::AutomationIdProperty,'AeroThemeOption'))
               $aero.GetCurrentPattern([System.Windows.Automation.SelectionItemPattern]::Pattern).Select()
               Start-Sleep -Milliseconds 600
               $saved = Get-Content (Join-Path $env:LOCALAPPDATA 'BlessedLine/state.json') -Raw | ConvertFrom-Json
@@ -80,6 +80,7 @@ jobs:
               }
           }
       - name: Attribute real Windows downloads to two applications
+        if: ${{ !cancelled() }}
         shell: pwsh
         run: |
           $identity = [System.Security.Principal.WindowsIdentity]::GetCurrent()
@@ -160,6 +161,7 @@ jobs:
               }
           }
       - name: Verify standard-user discovery and the ETW helper channel
+        if: ${{ !cancelled() }}
         shell: pwsh
         run: |
           $exe = (Resolve-Path './src/BlessedLine.Desktop/bin/Release/net10.0-windows/BlessedLine.exe').Path

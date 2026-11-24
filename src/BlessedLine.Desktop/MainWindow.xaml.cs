@@ -55,6 +55,8 @@ public partial class MainWindow : Window
         using var fallback = ApplicationIcon.Stock(2);
         _fallbackIcon = ApplicationIcon.Image(fallback);
         InitializeComponent();
+        using var settingsIcon = ApplicationIcon.Stock(106); // SIID_SETTINGS
+        SettingsSymbol.Source = ApplicationIcon.Image(settingsIcon);
         System.Windows.Application.Current.SessionEnding += (_, _) => _sessionEnding = true;
         StateChanged += (_, _) =>
         {

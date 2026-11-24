@@ -16,13 +16,14 @@ internal static class ConnectedApps
         AddOwners(ids, 2);  // AF_INET
         AddOwners(ids, 23); // AF_INET6
         var apps = new Dictionary<string, ConnectedApp>(StringComparer.OrdinalIgnoreCase);
+        var image = new StringBuilder(32768);
         foreach (var pid in ids)
         {
             try
             {
                 using var process = OpenProcess(0x1000, false, pid); // PROCESS_QUERY_LIMITED_INFORMATION
                 if (process.IsInvalid) continue;
-                var image = new StringBuilder(32768);
+                image.Clear();
                 int size = image.Capacity;
                 if (!QueryFullProcessImageName(process, 0, image, ref size)) continue;
                 var path = image.ToString();
@@ -79,6 +80,6 @@ internal static class ConnectedApps
 
     [DllImport("iphlpapi.dll")]
     private static extern uint GetExtendedTcpTable(nint table, ref int size, bool sort, int family, int tableClass, int reserved);
-    [DllImport("kernel32.dll", CharSet = CharSet.Unicode)]
+    [DllImport("kernel32.dll", CharSet = CharSet.Unicode, ExactSpelling = true)]
     private static extern int GetApplicationUserModelId(Microsoft.Win32.SafeHandles.SafeProcessHandle process, ref uint length, StringBuilder appId);
 }

@@ -6,7 +6,7 @@ internal sealed class TrayMenu : IDisposable
 {
     private readonly Forms.NotifyIcon _icon;
     private readonly Forms.ContextMenuStrip _menu = new();
-    private readonly System.Drawing.Icon _symbol = ApplicationIcon.Stock(15); // Network computer
+    private readonly System.Drawing.Icon _symbol = ApplicationIcon.Stock(103); // SIID_NETWORKCONNECT
 
     public TrayMenu(Action open, Action mini, Action restore, Action exit)
     {
