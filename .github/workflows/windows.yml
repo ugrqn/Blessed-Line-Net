@@ -333,3 +333,7 @@ jobs:
                   if (!$app.HasExited) { $app.Kill(); $app.WaitForExit() }
               }
           }
+      - name: Exercise live app controls, WLAN UI and working-set budget
+        if: ${{ !cancelled() }}
+        shell: pwsh
+        run: ./tests/windows/application-controls.ps1 -Executable $env:BLESSED_EXE
