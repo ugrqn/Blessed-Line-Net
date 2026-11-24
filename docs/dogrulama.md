@@ -1,5 +1,20 @@
 # Doğrulama kaydı
 
+## BlessedLine 0.4.1
+
+Yüklenen ICO’nun orijinal 256 piksel karesi x64 ve x86 EXE kaynaklarında bayt düzeyinde doğrulandı. Simge dosyası ayrıca küçük görev çubuğu ve bildirim alanı boyutları için 16–64 piksel kareler içerir. Windows testi mini penceredeki simgeyi, başlangıç kayıt defteri değerini, açılışı kapatıp tekrar açmayı, penceresiz ağ ölçümünü ve ikinci EXE çalıştırmasının mevcut pencereyi açmasını doğruladı. [Windows paket testi](https://github.com/ugrqn/Blessed-Line-Net/actions/runs/45386216755)
+
+Windows Server 2025 üzerinde 0.4.0 uygulamasında ana pencere açıldı ve tepsiye gizlendi. 0.4.1 doğrudan tepside başlatıldı. Her süreç için üç ölçümün ortanca değeri kullanıldı. Çalışma kümesi o anda RAM’de bulunan sayfaları, özel baytlar ise sürecin kendi ayırdığı belleği gösterir.
+
+| Paket | 0.4.0 çalışma kümesi | 0.4.1 çalışma kümesi | 0.4.0 özel bayt | 0.4.1 özel bayt |
+|---|---:|---:|---:|---:|
+| x64 | 146,8 MiB | 64,1 MiB | 55,7 MiB | 15,4 MiB |
+| x86 | 129,7 MiB | 55,2 MiB | 54,4 MiB | 13,6 MiB |
+
+İki Windows paketi de 21 çekirdek testini, çekirdek ağ ölçümü ve arayüz testlerini geçti. Oturum açılışında kullanılan kayıt doğrulandı ve kayıtlı komut test ortamında çalıştırıldı.
+
+7-Zip her iki Windows arşivinin bütünlüğünü doğruladı. GitHub’dan indirilen paketlerin SHA-256 değerleri yerel paketlerle eşleşti. [Arşivler ve SHA-256 listesi](https://github.com/ugrqn/Blessed-Line-Net/releases/tag/v0.4.1-preview)
+
 ## BlessedLine 0.4.0
 
 Windows kaynak derlemesi 21 birim testiyle birlikte geçti. Windows çalıştırıcısında ana ve mini pencere, mini panelden 1.234,5 MB kotanın yazılması, tepsiden dönüş, Aero tercihi, 11 dilde açılış, iki süreçte canlı trafik atfı ve standart kullanıcıda bağlantı listesi kontrol edildi. [Windows doğrulaması](https://github.com/ugrqn/Blessed-Line-Net/actions/runs/45377940525)
