@@ -162,7 +162,10 @@ internal sealed class AppPolicyController(WindowStateData state, SettingsStore s
             var remaining = Math.Max(0, rule.QuotaBytes - rule.UsedBytes);
             rule.UsedBytes += Math.Min(remaining, signal.Received) + Math.Min(Math.Max(0, remaining - signal.Received), signal.Sent);
             _dirty = true;
-            if (rule.UsedBytes >= rule.QuotaBytes && _queries.Add(path))
+        }
+        foreach (var (path, rule) in state.AppRules)
+        {
+            if (rule.QuotaBytes > 0 && !rule.IsBlocked && rule.UsedBytes >= rule.QuotaBytes && _queries.Add(path))
                 _ = EnforceBudgetAsync(path);
         }
         if (_dirty && _clock.Elapsed - _lastSave >= TimeSpan.FromSeconds(6)) Save();
