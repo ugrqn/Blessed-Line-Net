@@ -2,6 +2,7 @@ using System.ComponentModel;
 using System.Diagnostics;
 using System.Globalization;
 using System.IO;
+using System.Reflection;
 using System.Runtime.InteropServices;
 using System.Security.Cryptography;
 using System.Text;
@@ -82,8 +83,9 @@ internal static class ApplicationPolicy
                                    InvalidOperationException or NotSupportedException or System.Reflection.TargetInvocationException or
                                    Microsoft.CSharp.RuntimeBinder.RuntimeBinderException)
         {
-            Debug.WriteLine(ex);
-            return new(false, ex.Message);
+            var cause = ex is TargetInvocationException { InnerException: { } inner } ? inner : ex;
+            Debug.WriteLine(cause);
+            return new(false, cause.Message);
         }
     }
 
@@ -144,6 +146,11 @@ internal static class ApplicationPolicy
             ((dynamic)rules).Add(rule);
             return true;
         }
+        catch (Exception ex) when (ex is COMException or TargetInvocationException)
+        {
+            var cause = ex is TargetInvocationException { InnerException: { } inner } ? inner : ex;
+            throw new InvalidOperationException($"Windows Firewall: {cause.Message}", cause);
+        }
         finally { Marshal.ReleaseComObject(rule); }
     }
 
@@ -155,8 +162,11 @@ internal static class ApplicationPolicy
             Marshal.ReleaseComObject(rule);
             return true;
         }
-        catch (COMException ex) when (ex.HResult == unchecked((int)0x80070002)) { return false; }
+        catch (COMException ex) when (IsMissingRule(ex)) { return false; }
+        catch (TargetInvocationException ex) when (ex.InnerException is COMException cause && IsMissingRule(cause)) { return false; }
     }
+
+    private static bool IsMissingRule(COMException error) => error.HResult == unchecked((int)0x80070002);
 
     private static void RemoveRule(object rules, string name)
     {

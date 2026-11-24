@@ -47,10 +47,11 @@ internal sealed class ApplicationTraffic : IDisposable
 
     private void ReadEvents()
     {
-        // A unique system logger avoids stopping or reusing another program's ETW session.
+        // Reusing the name for this desktop session also recovers our logger after a crash.
         try
         {
-            using var session = new TraceEventSession($"BlessedLine-{Guid.NewGuid():N}") { BufferSizeMB = 8 };
+            using var process = Process.GetCurrentProcess();
+            using var session = new TraceEventSession($"BlessedLine.ApplicationTraffic.{process.SessionId}") { BufferSizeMB = 8 };
             session.EnableKernelProvider(KernelTraceEventParser.Keywords.NetworkTCPIP | KernelTraceEventParser.Keywords.Process);
             var parser = session.Source.Kernel;
             parser.ProcessStart += e => _processes.Remove(e.ProcessID);

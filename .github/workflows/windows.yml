@@ -70,7 +70,7 @@ jobs:
           # Seed a quota large enough to remain active throughout the panel check.
           $profile = Join-Path $env:LOCALAPPDATA 'BlessedLine'
           New-Item $profile -ItemType Directory -Force | Out-Null
-          @{ Counter = @{ Name = 'Toplam sayaç'; UsedBytes = 500000000; LimitBytes = 1000000000 } } |
+          @{ AutoMeasureApplications = $false; Counter = @{ Name = 'Toplam sayaç'; UsedBytes = 500000000; LimitBytes = 1000000000 } } |
               ConvertTo-Json | Set-Content (Join-Path $profile 'state.json')
           $p = Start-Process -FilePath $env:BLESSED_EXE -PassThru
           try {
@@ -178,6 +178,8 @@ jobs:
         if: ${{ !cancelled() }}
         shell: pwsh
         run: |
+          @{ Language = 'tr'; AutoMeasureApplications = $true } | ConvertTo-Json |
+              Set-Content (Join-Path $env:LOCALAPPDATA 'BlessedLine/state.json')
           $identity = [System.Security.Principal.WindowsIdentity]::GetCurrent()
           $principal = [System.Security.Principal.WindowsPrincipal]::new($identity)
           if (-not $principal.IsInRole([System.Security.Principal.WindowsBuiltInRole]::Administrator)) {
