@@ -1,4 +1,4 @@
-name: Publish Windows download
+name: Publish release downloads
 
 on:
   workflow_dispatch:
@@ -6,11 +6,10 @@ on:
       tag:
         description: Existing release tag (for example, v0.3.0-preview)
         required: true
-        default: v0.3.0-preview
+        default: v0.4.0-preview
       sha256:
-        description: SHA-256 of the verified package on the downloads branch
+        description: SHA-256 of the verified checksum manifest on the downloads branch
         required: true
-        default: 7ede62873178a5a914171dd2004be757b7d28aae61344f1d99aa05239f75bcdc
 
 permissions:
   contents: write
@@ -26,8 +25,11 @@ jobs:
           persist-credentials: false
           sparse-checkout: |
             /*.7z
+            /*.tar.gz
+            /*.zip
+            /*-SHA256SUMS.txt
           sparse-checkout-cone-mode: false
-      - name: Verify package and attach it to the release
+      - name: Verify and attach release packages
         env:
           GH_TOKEN: ${{ github.token }}
           RELEASE_TAG: ${{ inputs.tag }}
@@ -37,10 +39,14 @@ jobs:
             echo "Expected a version tag such as v0.3.0-preview"
             exit 1
           fi
-          package="BlessedLine-${BASH_REMATCH[1]}-win-x64.7z"
+          version="${BASH_REMATCH[1]}"
+          base="BlessedLine-$version"
+          manifest="$base-SHA256SUMS.txt"
+          packages=("$base-win-x64.7z" "$base-win-x86.7z" "$base-linux.tar.gz" "$base-downloads.zip")
           if [[ ! "$PACKAGE_SHA" =~ ^[a-f0-9]{64}$ ]]; then
             echo "Expected a lowercase SHA-256 digest"
             exit 1
           fi
-          printf '%s  %s\n' "$PACKAGE_SHA" "$package" | sha256sum --check --strict
-          gh release upload "$RELEASE_TAG" "$package" --repo "$GITHUB_REPOSITORY"
+          printf '%s  %s\n' "$PACKAGE_SHA" "$manifest" | sha256sum --check --strict
+          sha256sum --check --strict "$manifest"
+          gh release upload "$RELEASE_TAG" "${packages[@]}" "$manifest" --repo "$GITHUB_REPOSITORY"
