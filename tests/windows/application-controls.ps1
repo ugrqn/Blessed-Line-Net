@@ -67,6 +67,15 @@ function Fixture-Request {
     return $probe.ExitCode
 }
 
+function Start-FixtureTransfer {
+    return Start-Process -FilePath $fixture -ArgumentList @('--silent','--show-error','--fail','--limit-rate','12k','--max-time','32',
+        '--output','NUL',$uri) -PassThru
+}
+
+function Stop-Transfer($process) {
+    if ($process -and !$process.HasExited) { $process.Kill(); $process.WaitForExit() }
+}
+
 function FixtureRow {
     $name = ByName $script:window 'BlessedFixture'
     $walker = [System.Windows.Automation.TreeWalker]::RawViewWalker
@@ -138,11 +147,13 @@ try {
     Check ($null -ne (ById $window 'PingValue')) 'Internet ping is shown next to transfer speeds'
     Wait-Check { (ById $window 'DetailStatus').Current.Name -like 'Uygulama ölçümü açık*' } 'Automatic ETW measurement starts'
     Check ((Fixture-Request) -eq 0) 'Dedicated test executable reaches an Internet endpoint'
+    $live = Start-FixtureTransfer
     Wait-Check { $null -ne (FixtureRow) } 'Live traffic adds the dedicated executable to the app list'
 
     MouseAt (FixtureRow) 2 4 2
     Wait-Check { $null -ne (ById $ui::RootElement 'AppQuotaInput') } 'Double-click opens application details'
     Check ($null -ne (ById $ui::RootElement 'RateSummary')) 'Live graph panel has download/upload readings'
+    Stop-Transfer $live
 
     $upload = ById $ui::RootElement 'UploadCapInput'
     $upload.GetCurrentPattern($valuePattern).SetValue('1500')
@@ -156,8 +167,9 @@ try {
     $quota.GetCurrentPattern($valuePattern).SetValue('0,03')
     (ById $ui::RootElement 'ApplyAppQuota').GetCurrentPattern($invoke).Invoke()
     Wait-Check { (FixtureRule).QuotaBytes -eq 30000 } 'Individual data quota saves decimal MB'
-    $null = Fixture-Request
+    $budgetTransfer = Start-FixtureTransfer
     Wait-Check { (FixtureRule).BudgetBlocked -eq $true } 'Attributed traffic triggers automatic per-app cutoff'
+    Stop-Transfer $budgetTransfer
     $blocks = @(Get-NetFirewallRule -Group $group)
     Check ($blocks.Count -eq 2 -and @($blocks | Get-NetFirewallApplicationFilter | Where-Object Program -EQ $fixture).Count -eq 2) 'Windows Firewall records both directions for the chosen executable'
     Check ((Fixture-Request) -ne 0) 'Internet connection is actually blocked'
@@ -206,6 +218,8 @@ try {
     Check ($script:checks -ge 10) 'At least ten Windows scenarios were exercised'
     Write-Host ("Authenticode status: " + (Get-AuthenticodeSignature $exe).Status)
 } finally {
+    Stop-Transfer $live
+    Stop-Transfer $budgetTransfer
     if ($script:app -and !$script:app.HasExited) { $script:app.Kill(); $script:app.WaitForExit() }
     Get-NetFirewallRule -Group $group -ErrorAction SilentlyContinue | Remove-NetFirewallRule -ErrorAction SilentlyContinue
     Remove-NetFirewallRule -Name $sentinel -ErrorAction SilentlyContinue
