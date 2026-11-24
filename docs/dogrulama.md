@@ -8,7 +8,7 @@ Kota tetikleyici testleri mevcut kotanın aşılması, sınırı yeni geçme, sa
 
 Debian 13 üzerinde Linux arşivinden başlatılan Tk arayüzü, yerel ağ bağdaştırıcısı, mini panel ve 11 dil kontrolüyle açıldı. NetworkManager kapatma ve açma komutlarının çağrılması testte taklit edildi. Aynı Linux ortamında Chromium ile indirme sayfasının 11 dilinde tarayıcı diline göre açılış, Arapça ve Urduca sağdan sola yön, mobil yerleşim, dil değiştirme ve üç bağlantının hedefi kontrol edildi.
 
-Windows x64 ve x86 paketleri .NET çalışma zamanı dahil olarak üretildi ve 7-Zip bütünlük testinden geçti. SHA-256 listesi GitHub sürümünün Assets bölümündedir. [Sürüm](https://github.com/ugrqn/Blessed-Line-Net/releases/tag/v0.4.0-preview)
+Her iki Windows paketi de Windows Server 2025 x64 çalıştırıcısında arşivden ayıklandı ve EXE üzerinden aynı arayüz, 11 dil ve trafik testlerini geçti. x86 programı Windows’un 32 bit uyumluluk katmanında çalıştırıldı. Her iki arşiv 7-Zip bütünlük testini geçti. GitHub Releases’ten indirilen Windows, Linux ve indirme sayfası paketlerinin SHA-256 değerleri yerel paketlerle eşleşti. [Windows paket testi](https://github.com/ugrqn/Blessed-Line-Net/actions/runs/45378388914) [Sürüm](https://github.com/ugrqn/Blessed-Line-Net/releases/tag/v0.4.0-preview)
 
 ## BlessedLine 0.3.0
 

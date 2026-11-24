@@ -2,7 +2,7 @@
 
 BlessedLine, Windows ve Linux için internet kullanımı ve kota sayacıdır. Ana pencere seçili bağlantının hızını ve kotasını, altındaki tablo ise ağ kullanan uygulamaları gösterir.
 
-[English](docs/README.en.md) · [Sürüm notları](https://github.com/ugrqn/Blessed-Line-Net/releases/tag/v0.4.0-preview)
+[English](docs/README.en.md) · [Sürüm notları](https://github.com/ugrqn/Blessed-Line-Net/releases/tag/v0.4.0-preview) · [11 dilli indirme kartları (ZIP)](https://github.com/ugrqn/Blessed-Line-Net/releases/download/v0.4.0-preview/BlessedLine-0.4.0-downloads.zip)
 
 ## İndir
 
