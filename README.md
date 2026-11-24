@@ -4,7 +4,9 @@ BlessedLine, Windows 11 x64 için Türkçe internet kullanımı ve kota sayacıd
 
 ## Windows’ta açma
 
-[0.3.0 taşınabilir paketi](https://github.com/ugrqn/Blessed-Line-Net/blob/downloads/BlessedLine-0.3.0-win-x64.7z) bağlantısını aç ve GitHub’daki indirme düğmesine bas. Önceki sürüm açıksa görev çubuğundaki BlessedLine simgesine sağ tıklayıp **Çıkış**’ı seç. İndirdiğin arşivin tamamını yeni bir klasöre ayıkla. İçindeki `BlessedLine.exe` dosyasına çift tıkla. Paket .NET çalışma zamanını içerir.
+**[Windows için BlessedLine 0.3.0’ı indir · 49,8 MB](https://github.com/ugrqn/Blessed-Line-Net/releases/download/v0.3.0-preview/BlessedLine-0.3.0-win-x64.7z)**
+
+Önceki sürüm açıksa görev çubuğundaki BlessedLine simgesine sağ tıklayıp **Çıkış**’ı seç. İndirdiğin arşivin tamamını yeni bir klasöre ayıkla. İçindeki `BlessedLine.exe` dosyasına çift tıkla. Paket .NET çalışma zamanını içerir.
 
 ## Uygulamalar ve sayaçlar
 
