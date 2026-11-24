@@ -1,13 +1,17 @@
 using System.ComponentModel;
+using System.Globalization;
 using System.Net.NetworkInformation;
 using System.Runtime.InteropServices;
 using System.Text;
 
 namespace BlessedLine.Desktop;
 
+internal sealed record WifiFact(string Label, string Value);
+internal sealed record WifiAccessPoint(string SsidId, string Bssid, int Rssi, uint FrequencyKhz, uint BssType,
+    bool Secure, string? Country, bool WifiDirect);
 internal sealed record WifiNetwork(string Name, uint Quality, string Security, string Cipher, string Standard,
-    uint AccessPoints, string Profile, bool Connected, bool Connectable);
-internal sealed record WifiSnapshot(string Adapter, string Overview, WifiNetwork[] Nearby, string Status, bool NeedsLocation);
+    uint AccessPoints, string Profile, bool Connected, bool Connectable, WifiAccessPoint? Radio);
+internal sealed record WifiSnapshot(WifiFact[] Overview, WifiNetwork[] Nearby, string Status, bool NeedsLocation);
 
 internal static class WifiDiagnostics
 {
@@ -21,11 +25,11 @@ internal static class WifiDiagnostics
             ?? adapters.FirstOrDefault(item => item.OperationalStatus == OperationalStatus.Up)
             ?? adapters.FirstOrDefault();
         if (adapter is null || !Guid.TryParse(adapter.Id, out var id))
-            return new("", "", [], T("NoWifiAdapter"), false);
+            return new([], [], T("NoWifiAdapter"), false);
 
         var ip = adapter.GetIPProperties();
-        var facts = new StringBuilder();
-        void Add(string label, string value) => facts.Append(T(label)).Append("   ").AppendLine(value);
+        var facts = new List<WifiFact>();
+        void Add(string label, string value) => facts.Add(new(T(label), string.IsNullOrEmpty(value) ? "—" : value));
         Add("WifiAdapter", adapter.Description);
         Add("WifiState", T(adapter.OperationalStatus == OperationalStatus.Up ? "WifiConnected" : "WifiDisconnected"));
         Add("WifiAddress", string.Join(", ", ip.UnicastAddresses.Select(item => item.Address.ToString())));
@@ -42,27 +46,70 @@ internal static class WifiDiagnostics
                 radio.Scan(id);
                 await Task.Delay(1800).ConfigureAwait(false);
             }
+            var accessPoints = radio.GetAccessPoints(id);
             if (radio.GetConnection(id) is { } active)
             {
                 Add("WifiNetwork", active.Network);
                 if (!string.IsNullOrEmpty(active.Profile)) Add("WifiProfile", active.Profile);
                 Add("WifiRadioAddress", active.Bssid);
                 Add("WifiSignal", $"{active.Signal}%");
-                if (radio.ReadChannel(id) is { } channel) Add("WifiChannel", channel.ToString());
+                if (radio.ReadChannel(id) is { } channel) Add("WifiChannel", channel.ToString(TextCatalog.Culture));
                 Add("WifiStandard", active.Standard);
                 Add("WifiSecurity", $"{active.Security} / {active.Cipher}");
                 Add("WifiRxTx", $"↓ {active.Rx / 1000d:N1}   ↑ {active.Tx / 1000d:N1} Mb/s");
+                AddAccessPointFacts(facts, accessPoints.FirstOrDefault(point => point.Bssid == active.Bssid));
+                Add("WifiCity", T("WifiUnavailable"));
+                Add("WifiDevice", T("WifiUnavailable"));
             }
-            var networks = radio.GetNearby(id);
-            return new(adapter.Name, facts.ToString().TrimEnd(), networks,
+            var networks = radio.GetNearby(id, accessPoints);
+            return new(facts.ToArray(), networks,
                 networks.Length == 0 ? T("NoNearbyNetworks") : "", false);
         }
         catch (Win32Exception ex)
         {
             var status = ex.NativeErrorCode == 5 ? T("WifiLocationRequired") : TextCatalog.Format("WifiReadError", ex.Message);
-            return new(adapter.Name, facts.ToString().TrimEnd(), [], status, ex.NativeErrorCode == 5);
+            return new(facts.ToArray(), [], status, ex.NativeErrorCode == 5);
         }
     }
+
+    internal static void AddAccessPointFacts(List<WifiFact> facts, WifiAccessPoint? point)
+    {
+        void Add(string label, string value) => facts.Add(new(T(label), value));
+        var country = point?.Country;
+        Add("WifiCountry", country is null ? T("WifiUnavailable") : FormatCountry(country));
+        if (point is null) return;
+        Add("WifiFrequency", $"{point.FrequencyKhz / 1000d:N0} MHz");
+        Add("WifiRssi", $"{point.Rssi} dBm");
+        Add("WifiTopology", point.BssType switch
+        {
+            1 => T("WifiInfrastructure"),
+            2 => T("WifiPeerToPeer"),
+            _ => T("WifiUnavailable")
+        });
+        if (point.WifiDirect) Add("WifiCapabilities", "Wi-Fi Direct");
+    }
+
+    internal static int? Channel(uint khz)
+    {
+        var mhz = (int)(khz / 1000);
+        return mhz switch
+        {
+            2484 => 14,
+            >= 2412 and <= 2472 => (mhz - 2407) / 5,
+            >= 5005 and <= 5895 => (mhz - 5000) / 5,
+            5935 => 2,
+            >= 5955 and <= 7115 => (mhz - 5950) / 5,
+            >= 58320 and <= 70200 => (mhz - 56160) / 2160,
+            _ => null
+        };
+    }
+
+    private static string FormatCountry(string country)
+    {
+        try { return $"{new RegionInfo(country).DisplayName} ({country})"; }
+        catch (ArgumentException) { return country; }
+    }
+
 }
 
 internal sealed partial class WifiRadio
@@ -97,25 +144,106 @@ internal sealed partial class WifiRadio
 
     internal void Scan(Guid adapter) => Check(WlanScan(this, in adapter, 0, 0, 0));
 
-    internal WifiNetwork[] GetNearby(Guid adapter)
+    internal WifiNetwork[] GetNearby(Guid adapter, WifiAccessPoint[] accessPoints)
     {
         Check(WlanGetAvailableNetworkList(this, in adapter, 0, 0, out var data));
         try
         {
             var count = Math.Clamp(Marshal.ReadInt32(data), 0, 512);
             var size = Marshal.SizeOf<AvailableNetwork>();
+            var strongest = accessPoints.GroupBy(point => (point.SsidId, point.Secure))
+                .ToDictionary(group => group.Key, group => group.MaxBy(point => point.Rssi));
             var result = new WifiNetwork[count];
             for (var i = 0; i < count; i++)
             {
                 var item = Marshal.PtrToStructure<AvailableNetwork>(data + 8 + i * size);
                 var standard = string.Join(", ", item.PhyTypes.Take((int)Math.Min(item.PhyCount, 8)).Select(Phy).Distinct());
                 result[i] = new(item.Ssid.AsText(), item.Quality, Auth(item.Auth, item.Secure != 0),
-                    CipherName(item.Cipher), standard, item.BssidCount, item.Profile, (item.Flags & 1) != 0, item.Connectable != 0);
+                    CipherName(item.Cipher), standard, item.BssidCount, item.Profile, (item.Flags & 1) != 0, item.Connectable != 0,
+                    item.Ssid.Length == 0 ? null : strongest.GetValueOrDefault((item.Ssid.Identity, item.Secure != 0)));
             }
             return result.OrderByDescending(item => item.Connected).ThenByDescending(item => item.Quality).ToArray();
         }
         finally { WlanFreeMemory(data); }
     }
+
+    internal WifiAccessPoint[] GetAccessPoints(Guid adapter)
+    {
+        // Some Windows versions expose aggregate networks without per-access-point data.
+        if (WlanGetNetworkBssList(this, in adapter, 0, 3, false, 0, out var list) != 0) return [];
+        try
+        {
+            var byteCount = Marshal.ReadInt32(list);
+            var count = Marshal.ReadInt32(list, 4);
+            var entrySize = Marshal.SizeOf<BssEntry>();
+            if (byteCount < 8 || byteCount > 4 * 1024 * 1024 || count < 0 || count > (byteCount - 8) / entrySize)
+                return [];
+
+            var results = new List<WifiAccessPoint>(Math.Min(count, 512));
+            Span<byte> information = stackalloc byte[2];
+            for (var i = 0; i < Math.Min(count, 512); i++)
+            {
+                var start = 8 + i * entrySize;
+                var pointer = list + start;
+                var entry = Marshal.PtrToStructure<BssEntry>(pointer);
+                var bssid = string.Join(":", entry.Bssid.Select(value => value.ToString("X2")));
+                string? country = null;
+                var direct = false;
+                if (entry.IeOffset >= entrySize && entry.IeOffset <= byteCount - start &&
+                    entry.IeSize <= byteCount - start - entry.IeOffset)
+                {
+                    var offset = (int)entry.IeOffset;
+                    var end = offset + (int)entry.IeSize;
+                    while (end - offset >= 2)
+                    {
+                        var tag = Marshal.ReadByte(pointer, offset++);
+                        var length = Marshal.ReadByte(pointer, offset++);
+                        if (length > end - offset) break;
+                        if (tag == 7 && length >= 3)
+                        {
+                            information[0] = Marshal.ReadByte(pointer, offset);
+                            information[1] = Marshal.ReadByte(pointer, offset + 1);
+                            if (information[0] is >= (byte)'A' and <= (byte)'Z' && information[1] is >= (byte)'A' and <= (byte)'Z')
+                                country = Encoding.ASCII.GetString(information);
+                        }
+                        else if (tag == 221 && length >= 4)
+                        {
+                            direct |= (uint)Marshal.ReadInt32(pointer, offset) == 0x099A6F50;
+                        }
+                        offset += length;
+                    }
+                }
+                results.Add(new(entry.Ssid.Identity, bssid, entry.Rssi, entry.Frequency, entry.BssType,
+                    (entry.Capability & 0x10) != 0, country, direct));
+            }
+            return results.ToArray();
+        }
+        finally { WlanFreeMemory(list); }
+    }
+
+    // Fixed-width Windows SDK WLAN_BSS_ENTRY, including its rate array.
+    [StructLayout(LayoutKind.Sequential)]
+    private struct BssEntry
+    {
+        public Ssid Ssid;
+        public uint PhyId;
+        [MarshalAs(UnmanagedType.ByValArray, SizeConst = 6)] public byte[] Bssid;
+        public uint BssType, PhyType;
+        public int Rssi;
+        public uint Quality;
+        public byte InRegDomain;
+        public ushort BeaconPeriod;
+        public ulong Timestamp, HostTimestamp;
+        public ushort Capability;
+        public uint Frequency;
+        public uint RatesLength;
+        [MarshalAs(UnmanagedType.ByValArray, SizeConst = 126)] public ushort[] Rates;
+        public uint IeOffset, IeSize;
+    }
+
+    [DllImport("wlanapi.dll")]
+    private static extern uint WlanGetNetworkBssList(WifiRadio radio, in Guid adapter, nint ssid, uint bssType,
+        [MarshalAs(UnmanagedType.Bool)] bool securityEnabled, nint reserved, out nint list);
 
     private static string Phy(uint value) => value switch
     {
@@ -141,6 +269,8 @@ internal sealed partial class WifiRadio
     {
         public uint Length;
         [MarshalAs(UnmanagedType.ByValArray, SizeConst = 32)] public byte[] Value;
+
+        public readonly string Identity => Convert.ToHexString(Value.AsSpan(0, (int)Math.Min(Length, 32)));
 
         public readonly string AsText()
         {

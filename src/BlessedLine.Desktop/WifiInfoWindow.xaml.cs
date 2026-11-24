@@ -1,6 +1,7 @@
 using System.ComponentModel;
 using System.Diagnostics;
 using System.Net.NetworkInformation;
+using System.Runtime.InteropServices;
 using System.Windows;
 using System.Windows.Controls;
 
@@ -42,8 +43,9 @@ public partial class WifiInfoWindow : Window
         {
             var info = await Task.Run(() => WifiDiagnostics.ReadAsync(_adapter, scan));
             if (_closed) return;
-            Overview.Text = string.IsNullOrWhiteSpace(info.Overview) ? info.Status : info.Overview;
+            Overview.ItemsSource = info.Overview;
             NearbyNetworks.ItemsSource = info.Nearby;
+            NearbyNetworks.SelectedIndex = info.Nearby.Length > 0 ? 0 : -1;
             WifiStatus.Text = info.Status;
             LocationButton.Visibility = info.NeedsLocation ? Visibility.Visible : Visibility.Collapsed;
         }
@@ -61,14 +63,40 @@ public partial class WifiInfoWindow : Window
     {
         if (NearbyNetworks.SelectedItem is not WifiNetwork network)
         {
-            SelectedNetwork.Text = "";
+            SelectedNetwork.ItemsSource = null;
             return;
         }
 
-        SelectedNetwork.Text = $"{T("WifiStandard")} {network.Standard} · {network.Security} / {network.Cipher}\n" +
-            $"{T("WifiAccessPoints")} {network.AccessPoints} · {T(network.Connectable ? "WifiCanConnect" : "WifiCannotConnect")}" +
-            (network.Connected ? $" · {T("WifiConnected")}" : "") +
-            (string.IsNullOrWhiteSpace(network.Profile) ? "" : $"\n{T("WifiProfile")} {network.Profile}");
+        var facts = new List<WifiFact>();
+        void Add(string label, string value) => facts.Add(new(T(label), string.IsNullOrEmpty(value) ? "—" : value));
+        Add("WifiNetwork", network.Name);
+        Add("WifiSignal", $"{network.Quality}%");
+        Add("WifiSecurity", $"{network.Security} / {network.Cipher}");
+        Add("WifiStandard", network.Standard);
+        Add("WifiAccessPoints", network.AccessPoints.ToString(TextCatalog.Culture));
+        Add("WifiState", T(network.Connected ? "WifiConnected" : network.Connectable ? "WifiCanConnect" : "WifiCannotConnect"));
+        if (!string.IsNullOrWhiteSpace(network.Profile)) Add("WifiProfile", network.Profile);
+        if (network.Radio is { } radio)
+        {
+            Add("WifiRadioAddress", radio.Bssid);
+            if (WifiDiagnostics.Channel(radio.FrequencyKhz) is int channel)
+                Add("WifiChannel", channel.ToString(TextCatalog.Culture));
+        }
+        WifiDiagnostics.AddAccessPointFacts(facts, network.Radio);
+        Add("WifiCity", T("WifiUnavailable"));
+        Add("WifiDevice", T("WifiUnavailable"));
+        SelectedNetwork.ItemsSource = facts;
+    }
+
+    private void CopyFact(object sender, RoutedEventArgs e)
+    {
+        if (sender is not Button { DataContext: WifiFact fact }) return;
+        try
+        {
+            System.Windows.Clipboard.SetText(fact.Value);
+            WifiStatus.Text = TextCatalog.Format("WifiCopied", fact.Label);
+        }
+        catch (ExternalException) { WifiStatus.Text = T("WifiCopyFailed"); }
     }
 
     private void OpenWindowsWifi(object sender, RoutedEventArgs e) => OpenSetting("ms-settings:network-wifi");

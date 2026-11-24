@@ -14,12 +14,47 @@
   <SolidColorBrush x:Key="Alternate" Color="#F3F8FC"/>
   <SolidColorBrush x:Key="Line" Color="#C9DCE8"/>
   <LinearGradientBrush x:Key="CaptionBrush" StartPoint="0,0" EndPoint="0,1"><GradientStop Color="#89B5D5"/><GradientStop Color="#C9E5FA" Offset=".55"/><GradientStop Color="#DEEFFB" Offset="1"/></LinearGradientBrush>
-            <Style TargetType="Button" BasedOn="{StaticResource {x:Type Button}}">
-                <Setter Property="Padding" Value="8,2"/><Setter Property="MinHeight" Value="23"/>
-            </Style>
-            <Style x:Key="CaptionButton" TargetType="Button" BasedOn="{StaticResource {x:Type Button}}">
-                <Setter Property="MinHeight" Value="18"/><Setter Property="Width" Value="24"/><Setter Property="Height" Value="19"/>
-                <Setter Property="Padding" Value="0"/><Setter Property="Margin" Value="2,0,0,0"/>
-                <Setter Property="shell:WindowChrome.IsHitTestVisibleInChrome" Value="True"/>
-            </Style>
+  <LinearGradientBrush x:Key="AeroButtonFill" StartPoint="0,0" EndPoint="0,1">
+    <GradientStop Color="#FFFFFF"/><GradientStop Color="#F5F7F8" Offset=".48"/>
+    <GradientStop Color="#E6E9EC" Offset=".51"/><GradientStop Color="#DFE4E8" Offset="1"/>
+  </LinearGradientBrush>
+  <Style TargetType="Button">
+    <Setter Property="Foreground" Value="{StaticResource Ink}"/>
+    <Setter Property="Padding" Value="8,2"/>
+    <Setter Property="MinHeight" Value="23"/>
+    <Setter Property="Background" Value="{StaticResource AeroButtonFill}"/>
+    <Setter Property="BorderBrush" Value="#8596A3"/>
+    <Setter Property="BorderThickness" Value="1"/>
+    <Setter Property="HorizontalContentAlignment" Value="Center"/>
+    <Setter Property="VerticalContentAlignment" Value="Center"/>
+    <Setter Property="Template">
+      <Setter.Value>
+        <ControlTemplate TargetType="Button">
+          <Border x:Name="Frame" CornerRadius="4" Background="{TemplateBinding Background}"
+                  BorderBrush="{TemplateBinding BorderBrush}" BorderThickness="{TemplateBinding BorderThickness}">
+            <ContentPresenter Margin="{TemplateBinding Padding}" RecognizesAccessKey="True"
+                              HorizontalAlignment="{TemplateBinding HorizontalContentAlignment}"
+                              VerticalAlignment="{TemplateBinding VerticalContentAlignment}"/>
+          </Border>
+          <ControlTemplate.Triggers>
+            <Trigger Property="IsMouseOver" Value="True">
+              <Setter TargetName="Frame" Property="Background" Value="#DAEEFC"/>
+              <Setter TargetName="Frame" Property="BorderBrush" Value="#4C89B4"/>
+            </Trigger>
+            <Trigger Property="IsPressed" Value="True">
+              <Setter TargetName="Frame" Property="Background" Value="#BFDDF2"/>
+              <Setter TargetName="Frame" Property="BorderBrush" Value="#326996"/>
+            </Trigger>
+            <Trigger Property="IsKeyboardFocused" Value="True"><Setter TargetName="Frame" Property="BorderBrush" Value="#326996"/></Trigger>
+            <Trigger Property="IsEnabled" Value="False"><Setter TargetName="Frame" Property="Opacity" Value=".55"/></Trigger>
+          </ControlTemplate.Triggers>
+        </ControlTemplate>
+      </Setter.Value>
+    </Setter>
+  </Style>
+  <Style x:Key="CaptionButton" TargetType="Button" BasedOn="{StaticResource {x:Type Button}}">
+    <Setter Property="MinHeight" Value="18"/><Setter Property="Width" Value="24"/><Setter Property="Height" Value="19"/>
+    <Setter Property="Padding" Value="0"/><Setter Property="Margin" Value="2,0,0,0"/>
+    <Setter Property="shell:WindowChrome.IsHitTestVisibleInChrome" Value="True"/>
+  </Style>
 </ResourceDictionary>

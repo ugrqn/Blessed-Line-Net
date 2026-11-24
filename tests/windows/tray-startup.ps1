@@ -8,7 +8,8 @@ $executablePath = (Resolve-Path $Executable).Path
 $profileDirectory = Join-Path $env:LOCALAPPDATA 'BlessedLine'
 $statePath = Join-Path $profileDirectory 'state.json'
 $runKey = 'HKCU:\Software\Microsoft\Windows\CurrentVersion\Run'
-$expected = '"' + $executablePath + '" --tray'
+$shortcutPath = Join-Path ([Environment]::GetFolderPath('Startup')) 'BlessedLine.lnk'
+$shortcutShell = New-Object -ComObject WScript.Shell
 
 function Wait-For([scriptblock] $condition, [string] $message) {
     for ($attempt = 0; $attempt -lt 40; $attempt++) {
@@ -62,15 +63,32 @@ if ($ReferenceArchive) {
     }
 }
 
+Remove-Item -LiteralPath $statePath -ErrorAction SilentlyContinue
+$firstRun = Start-Process -FilePath $executablePath -PassThru
+try {
+    Wait-For { Test-Path $statePath } 'Fresh startup did not save the default counter.'
+    $initial = Get-Content $statePath -Raw | ConvertFrom-Json
+    if ($initial.Counter.LimitBytes -ne 1000000000 -or $initial.Counter.WarningBeforeBytes -ne 100000000 -or
+        $initial.ArmedWifi -or $firstRun.HasExited) {
+        throw 'Fresh startup did not set a 1000 MB quota, 100 MB warning and safe Wi-Fi defaults.'
+    }
+    Write-Host 'Fresh startup saved 1000 MB quota and 100 MB warning with Wi-Fi cutoff off.'
+} finally { Stop-Application $firstRun }
 $resident = Start-Process -FilePath $executablePath -ArgumentList '--tray' -PassThru
 try {
-    Wait-For { (Get-ItemProperty -LiteralPath $runKey -ErrorAction SilentlyContinue).BlessedLine -eq $expected } 'Windows startup was not registered for the current user.'
+    Wait-For { Test-Path $shortcutPath } 'Windows startup shortcut was not created.'
+    $shortcut = $shortcutShell.CreateShortcut($shortcutPath)
+    if ($shortcut.TargetPath -ine $executablePath -or $shortcut.Arguments -ne '--tray' -or
+        $shortcut.Description -ne 'BlessedLine' -or $shortcut.IconLocation -notlike "$executablePath,*") {
+        throw 'Startup shortcut is missing the application name, target, tray argument or icon.'
+    }
+    if ((Get-ItemProperty -LiteralPath $runKey -ErrorAction SilentlyContinue).BlessedLine) { throw 'Legacy Run entry was not migrated.' }
     Start-Sleep -Seconds 5
     $resident.Refresh()
     if ($resident.HasExited -or $resident.MainWindowHandle -ne 0) { throw 'Tray startup did not remain in the background.' }
 
     $newMemory = Memory-Snapshot $resident
-    Print-Memory '0.6.0 tray with automatic application measurement' $newMemory
+    Print-Memory 'Current tray with automatic application measurement' $newMemory
 
     $duplicate = Start-Process -FilePath $executablePath -ArgumentList '--tray' -PassThru
     if (!$duplicate.WaitForExit(10000)) { Stop-Application $duplicate; throw 'A duplicate logon run did not exit.' }
@@ -87,6 +105,7 @@ try {
     Write-Host 'Startup registration, background counting, duplicate startup, and reopening the existing process passed.'
 } finally {
     Stop-Application $resident
+    Remove-Item -LiteralPath $shortcutPath -ErrorAction SilentlyContinue
     Remove-ItemProperty -LiteralPath $runKey -Name BlessedLine -ErrorAction SilentlyContinue
 }
 
@@ -96,8 +115,9 @@ try {
     Start-Sleep -Seconds 6
     $lightweight.Refresh()
     if ($lightweight.HasExited -or $lightweight.MainWindowHandle -ne 0) { throw 'Lightweight tray start failed.' }
-    Print-Memory '0.6.0 tray with application measurement disabled' (Memory-Snapshot $lightweight)
+    Print-Memory 'Current tray with application measurement disabled' (Memory-Snapshot $lightweight)
 } finally {
     Stop-Application $lightweight
+    Remove-Item -LiteralPath $shortcutPath -ErrorAction SilentlyContinue
     Remove-ItemProperty -LiteralPath $runKey -Name BlessedLine -ErrorAction SilentlyContinue
 }

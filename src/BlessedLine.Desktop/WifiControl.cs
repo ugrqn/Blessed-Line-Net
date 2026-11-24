@@ -11,11 +11,10 @@ internal sealed class WifiControl(WindowStateData settings, SettingsStore store,
     internal bool CanCut => settings.WifiRecovery is null &&
         meter.Selected?.Interface.NetworkInterfaceType == NetworkInterfaceType.Wireless80211;
 
-    internal void CheckLimit(IEnumerable<Counter> counters)
+    internal void CheckLimit(Counter counter, long previousUsage)
     {
         if (!CanCut || settings.ArmedWifi is not { } armed || !Guid.TryParse(meter.Selected?.Id, out var adapter)) return;
-        var counter = counters.FirstOrDefault(item => item.Id == armed.Counter);
-        if (counter is null || !armed.IsDue(counter, adapter)) return;
+        if (!armed.Crossed(counter, adapter, previousUsage)) return;
         var error = TurnOff(counter);
         if (error is null)
         {

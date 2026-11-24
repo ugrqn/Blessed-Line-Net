@@ -173,3 +173,16 @@ WifiSignal	Sinyal	Signal	信号	सिग्नल	Señal	الإشارة	Signal	
 WifiStandard	Standart	Standard	标准	मानक	Estándar	المعيار	Norme	স্ট্যান্ডার্ড	Padrão	Стандарт	معیار
 WifiState	Bağlantı durumu	Connection status	连接状态	कनेक्शन स्थिति	Estado de conexión	حالة الاتصال	État de connexion	সংযোগের অবস্থা	Estado da conexão	Состояние подключения	کنکشن کی حالت
 WindowsWifi	Windows Wi-Fi ayarları	Windows Wi-Fi settings	Windows Wi-Fi 设置	Windows Wi-Fi सेटिंग	Ajustes Wi-Fi de Windows	إعدادات Wi-Fi في Windows	Paramètres Wi-Fi de Windows	Windows Wi-Fi সেটিং	Configurações de Wi-Fi do Windows	Настройки Wi-Fi Windows	Windows Wi-Fi ترتیبات
+WifiCopy	Değeri kopyalamak için tıkla	Click to copy the value	点击复制值	मान कॉपी करने के लिए क्लिक करें	Haz clic para copiar el valor	انقر لنسخ القيمة	Cliquer pour copier la valeur	মান কপি করতে ক্লিক করুন	Clique para copiar o valor	Нажмите, чтобы скопировать значение	قدر نقل کرنے کے لیے کلک کریں
+WifiCopied	Kopyalandı · {0}	Copied · {0}	已复制 · {0}	कॉपी किया गया · {0}	Copiado · {0}	تم النسخ · {0}	Copié · {0}	কপি হয়েছে · {0}	Copiado · {0}	Скопировано · {0}	نقل ہوگیا · {0}
+WifiCopyFailed	Pano şu anda kullanılamıyor.	The clipboard is temporarily unavailable.	剪贴板暂时不可用。	क्लिपबोर्ड अभी उपलब्ध नहीं है।	El portapapeles no está disponible.	الحافظة غير متاحة مؤقتًا.	Le presse-papiers est indisponible.	ক্লিপবোর্ড এখন উপলভ্য নয়।	A área de transferência está indisponível.	Буфер обмена временно недоступен.	کلپ بورڈ دستیاب نہیں۔
+WifiCountry	Yayınlanan ülke kodu	Advertised country code	广播的国家代码	प्रसारित देश कोड	Código de país anunciado	رمز البلد المعلن	Code pays diffusé	সম্প্রচারিত দেশের কোড	Código de país anunciado	Объявленный код страны	نشر کردہ ملکی کوڈ
+WifiCity	Şehir	City	城市	शहर	Ciudad	المدينة	Ville	শহর	Cidade	Город	شہر
+WifiDevice	Cihaz türü	Device type	设备类型	डिवाइस प्रकार	Tipo de dispositivo	نوع الجهاز	Type d’appareil	ডিভাইসের ধরন	Tipo de dispositivo	Тип устройства	آلے کی قسم
+WifiUnavailable	Windows ağ verisinde yok	Unavailable in Windows network data	Windows 网络数据未提供	Windows नेटवर्क डेटा में उपलब्ध नहीं	No disponible en los datos de Windows	غير متاح في بيانات شبكة Windows	Absent des données réseau Windows	Windows নেটওয়ার্ক তথ্যে নেই	Indisponível nos dados de rede do Windows	Нет в сетевых данных Windows	Windows نیٹ ورک ڈیٹا میں دستیاب نہیں
+WifiFrequency	Frekans	Frequency	频率	आवृत्ति	Frecuencia	التردد	Fréquence	ফ্রিকোয়েন্সি	Frequência	Частота	فریکوئنسی
+WifiRssi	Sinyal gücü (RSSI)	Signal strength (RSSI)	信号强度 (RSSI)	सिग्नल शक्ति (RSSI)	Intensidad de señal (RSSI)	قوة الإشارة (RSSI)	Puissance du signal (RSSI)	সিগন্যাল শক্তি (RSSI)	Força do sinal (RSSI)	Мощность сигнала (RSSI)	سگنل کی طاقت (RSSI)
+WifiTopology	Ağ yapısı	Network mode	网络模式	नेटवर्क मोड	Modo de red	وضع الشبكة	Mode réseau	নেটওয়ার্ক মোড	Modo de rede	Режим сети	نیٹ ورک موڈ
+WifiInfrastructure	Erişim noktası	Access point	接入点	ऐक्सेस पॉइंट	Punto de acceso	نقطة وصول	Point d’accès	অ্যাক্সেস পয়েন্ট	Ponto de acesso	Точка доступа	رسائی پوائنٹ
+WifiPeerToPeer	Cihazdan cihaza	Peer to peer	点对点	डिवाइस से डिवाइस	Entre dispositivos	اتصال نظير إلى نظير	Pair à pair	ডিভাইস থেকে ডিভাইস	Ponto a ponto	Одноранговый	آلے سے آلے تک
+WifiCapabilities	Yayınlanan özellik	Advertised capability	广播功能	प्रसारित सुविधा	Capacidad anunciada	الميزة المعلنة	Capacité annoncée	ঘোষিত সুবিধা	Recurso anunciado	Объявленная возможность	مشتہر خصوصیت

@@ -214,7 +214,9 @@ public partial class MainWindow : Window
 
             foreach (var counter in _counters)
             {
+                var previous = counter.UsedBytes;
                 var notification = counter.Add(sample.Received, sample.Sent);
+                _wifi.CheckLimit(counter, previous);
                 if (notification is null)
                     continue;
 
@@ -223,7 +225,6 @@ public partial class MainWindow : Window
             }
 
             _pendingSave |= sample.Received > 0 || sample.Sent > 0;
-            _wifi.CheckLimit(_counters);
             UpdateQuota();
         }
         catch (Exception ex) when (ex is NetworkInformationException or OverflowException)
@@ -443,7 +444,6 @@ public partial class MainWindow : Window
             Save();
             Feedback.Text = limit.HasValue ? T("LimitUpdated") : T("LimitRemoved");
             NotifyCurrentThreshold();
-            _wifi.CheckLimit(_counters);
             UpdateQuota();
         }
         catch (Exception ex) when (ex is FormatException or OverflowException)
@@ -456,8 +456,13 @@ public partial class MainWindow : Window
     {
         try
         {
-            var currentLimit = Current.LimitBytes!.Value;
+            if (Current.LimitBytes is not long currentLimit) return;
             var extended = checked(currentLimit + QuotaStep);
+            if (extended <= Current.UsedBytes && _settings.WifiRecovery?.Counter == Current.Id)
+            {
+                Feedback.Text = T("QuotaNeedsLargerExtension");
+                return;
+            }
             if (Current.UsedBytes < extended && _settings.WifiRecovery?.Counter == Current.Id && !RestoreWifi()) return;
             Current.Extend(QuotaStep);
             SetCounterFields();
@@ -475,7 +480,6 @@ public partial class MainWindow : Window
         SetCounterFields();
         Save();
         NotifyCurrentThreshold();
-        _wifi.CheckLimit(_counters);
         UpdateQuota();
     }
 
@@ -490,7 +494,7 @@ public partial class MainWindow : Window
     {
         if (!_ready || _syncingWifi) return;
         var counter = Current;
-        if (_settings.WifiRecovery is not null || counter.LimitBytes is not > 0 ||
+        if (_settings.WifiRecovery is not null || counter.LimitBytes is not > 0 || counter.UsedBytes >= counter.LimitBytes ||
             _adapter?.Interface.NetworkInterfaceType != NetworkInterfaceType.Wireless80211 ||
             !Guid.TryParse(_adapter.Id, out var adapter))
         {
@@ -520,7 +524,6 @@ public partial class MainWindow : Window
         Save();
         Feedback.Text = T("WifiArmed");
         NotifyCurrentThreshold();
-        _wifi.CheckLimit(_counters);
         UpdateQuota();
     }
 

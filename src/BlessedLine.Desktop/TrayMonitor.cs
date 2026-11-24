@@ -52,7 +52,10 @@ internal sealed class TrayMonitor : IDisposable
             var notify = false;
             foreach (var counter in _settings.SavedCounters!)
             {
-                if (counter.Add(sample.Received, sample.Sent) is not { } notification) continue;
+                var previous = counter.UsedBytes;
+                var result = counter.Add(sample.Received, sample.Sent);
+                _wifi.CheckLimit(counter, previous);
+                if (result is not { } notification) continue;
                 _notifications.Notify(counter, notification, _settings.Sound);
                 notify = true;
             }
@@ -68,7 +71,6 @@ internal sealed class TrayMonitor : IDisposable
 
             _dirty |= changed || notify;
             if (notify || _ticks % 2 == 0) Flush();
-            _wifi.CheckLimit(_settings.SavedCounters!);
         }
         catch (Exception ex) when (ex is NetworkInformationException or OverflowException)
         {

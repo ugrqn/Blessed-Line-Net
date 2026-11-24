@@ -57,10 +57,21 @@ public partial class App : Application
         }
 
         TextCatalog.Select(_settings.Language);
+        _settings.SavedCounters?.RemoveAll(counter => counter is null);
+        var firstCounter = _settings.SavedCounters is not { Count: > 0 } && _settings.Counter is null;
         if (_settings.SavedCounters is not { Count: > 0 })
-            _settings.SavedCounters = [_settings.Counter ?? new Counter { Name = TextCatalog.Format("TotalCounter") }];
+            _settings.SavedCounters = [_settings.Counter ?? new Counter
+            {
+                Name = TextCatalog.Format("TotalCounter"),
+                LimitBytes = 1_000_000_000
+            }];
         _settings.Counter = _settings.SavedCounters.FirstOrDefault(counter => counter.Id == _settings.Counter?.Id)
             ?? _settings.SavedCounters[0];
+        if (firstCounter && _startupError is null)
+        {
+            try { _store.Save(_settings); }
+            catch (Exception ex) when (ex is System.IO.IOException or UnauthorizedAccessException) { Debug.WriteLine(ex); }
+        }
 
         _restore = new EventWaitHandle(false, EventResetMode.AutoReset, @"Local\BlessedLine.Restore");
         _listener = ThreadPool.RegisterWaitForSingleObject(_restore, (_, _) =>

@@ -35,4 +35,22 @@ public sealed class WifiQuotaTests
         counter.LimitBytes = null;
         Assert.False(quota.IsDue(counter, adapter));
     }
+
+    [Fact]
+    public void ChangingLimitsCannotCutWifiWithoutNewTrafficCrossingTheLimit()
+    {
+        var adapter = Guid.NewGuid();
+        var counter = new Counter { UsedBytes = 300, LimitBytes = 100 };
+        var quota = new WifiQuota(counter.Id, adapter);
+
+        counter.Extend(100);
+        Assert.False(quota.Crossed(counter, adapter, previousUsage: 300));
+        counter.LimitBytes = 50;
+        Assert.False(quota.Crossed(counter, adapter, previousUsage: 300));
+        counter.Extend(260);
+        Assert.False(quota.Crossed(counter, adapter, previousUsage: 300));
+        counter.Add(10, 0);
+        Assert.True(quota.Crossed(counter, adapter, previousUsage: 300));
+        Assert.False(quota.Crossed(counter, adapter, previousUsage: 310));
+    }
 }
