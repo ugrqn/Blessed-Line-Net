@@ -11,7 +11,8 @@
     <UseWindowsForms>true</UseWindowsForms>
     <SatelliteResourceLanguages>tr</SatelliteResourceLanguages>
     <Product>BlessedLine</Product>
-    <Version>0.4.0</Version>
+    <Version>0.4.1</Version>
+    <ApplicationIcon>Assets/BlessedLine.ico</ApplicationIcon>
   </PropertyGroup>
   <ItemGroup>
     <Using Remove="System.Windows.Forms" />

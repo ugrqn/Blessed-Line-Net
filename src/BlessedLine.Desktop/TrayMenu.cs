@@ -6,10 +6,14 @@ internal sealed class TrayMenu : IDisposable
 {
     private readonly Forms.NotifyIcon _icon;
     private readonly Forms.ContextMenuStrip _menu = new();
-    private readonly System.Drawing.Icon _symbol = ApplicationIcon.Stock(103); // SIID_NETWORKCONNECT
+    private readonly System.Drawing.Icon _symbol;
+    private string _lastText = "BlessedLine";
 
     public TrayMenu(Action open, Action mini, Action restore, Action exit)
     {
+        using var stream = System.Windows.Application.GetResourceStream(new Uri("Assets/BlessedLine.ico", UriKind.Relative)).Stream;
+        using var icon = new System.Drawing.Icon(stream, 16, 16);
+        _symbol = (System.Drawing.Icon)icon.Clone();
         _menu.Items.Add(TextCatalog.Format("TrayOpen"), null, (_, _) => open());
         _menu.Items.Add(TextCatalog.Format("TrayMini"), null, (_, _) => mini());
         _menu.Items.Add(TextCatalog.Format("RestoreWifi"), null, (_, _) => restore());
@@ -31,7 +35,9 @@ internal sealed class TrayMenu : IDisposable
     public void Update(string down, string up, string remaining)
     {
         var text = $"BlessedLine · ↓ {down} ↑ {up}\n{remaining}";
-        _icon.Text = text.Length <= 63 ? text : text[..63];
+        var tooltip = text.Length <= 63 ? text : text[..63];
+        if (_lastText == tooltip) return;
+        _icon.Text = _lastText = tooltip;
     }
 
     public void Notify(string message) =>

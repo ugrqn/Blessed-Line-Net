@@ -9,19 +9,24 @@ public sealed class ApplicationRow : INotifyPropertyChanged
     public ApplicationRow(string? path, ImageSource fallback)
     {
         Path = path;
-        Icon = ApplicationIcon.Read(path) ?? fallback;
+        _fallback = fallback;
     }
 
     public string? Path { get; }
     public string Name => ApplicationName.FromPath(Path);
-    public ImageSource Icon { get; private set; }
+    public ImageSource Icon => _icon ??= (_appId is null ? null : ApplicationIcon.Packaged(_appId))
+        ?? ApplicationIcon.Read(Path) ?? _fallback;
+
+    private readonly ImageSource _fallback;
+    private ImageSource? _icon;
     private string? _appId;
     private bool _measured;
     internal void SetAppId(string? appId)
     {
         if (appId is null || _appId == appId) return;
         _appId = appId;
-        Icon = ApplicationIcon.Packaged(appId) ?? Icon;
+        if (_icon is null) return;
+        _icon = null;
         PropertyChanged?.Invoke(this, new(nameof(Icon)));
     }
     public long Received { get; private set; }

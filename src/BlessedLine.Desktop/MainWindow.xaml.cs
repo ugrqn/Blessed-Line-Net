@@ -1,7 +1,6 @@
 using System.Collections.ObjectModel;
 using System.ComponentModel;
 using System.Diagnostics;
-using System.Media;
 using System.Net.NetworkInformation;
 using System.Security.Principal;
 using System.Windows;
@@ -14,7 +13,6 @@ namespace BlessedLine.Desktop;
 
 public partial class MainWindow : Window
 {
-    private static readonly string[] SoundNames = ["normal", "soft", "strong"];
     private const long QuotaStep = 100_000_000;
     private const string UnknownApplication = "<unknown>";
     private readonly DispatcherTimer _timer = new() { Interval = TimeSpan.FromSeconds(1) };
@@ -22,33 +20,43 @@ public partial class MainWindow : Window
     private readonly ObservableCollection<ApplicationRow> _rows = new();
     private readonly Dictionary<string, ApplicationRow> _byApplication = new(StringComparer.OrdinalIgnoreCase);
     private readonly ObservableCollection<Counter> _counters = new();
-    private readonly SettingsStore _store = new();
+    private readonly SettingsStore _store;
+    private readonly AdapterMeter _meter;
+    private readonly QuotaNotifications _notifications;
+    private readonly string? _startupError;
     private readonly ImageSource _fallbackIcon;
-    private TrayMenu? _tray;
+    private readonly TrayMenu _tray;
     private TrafficHelper? _helper;
     private bool _quit, _discoveryPending, _sessionEnding;
     private string _measureStatus = "ConnectionsOnly";
     private string _discoveryStatus = "";
     private readonly HashSet<string> _connected = new(StringComparer.OrdinalIgnoreCase);
+    private readonly HashSet<string> _updated = new(StringComparer.OrdinalIgnoreCase);
     private static readonly SolidColorBrush AvailableBrush = new(Color.FromRgb(62, 146, 64));
     private static readonly SolidColorBrush FullBrush = new(Color.FromRgb(193, 55, 45));
     private readonly bool _isAdmin = IsAdministrator();
-    private WindowStateData _settings = new();
+    private readonly WindowStateData _settings;
     private ApplicationTraffic? _applicationTraffic;
-    private SoundPlayer? _player;
-    private AdapterChoice? _adapter;
-    private TrafficReading? _previous;
+    private AdapterChoice? _adapter => _meter.Selected;
     private WifiQuota? _wifiQuota;
     private bool _ready, _refreshing, _mini, _details, _pendingSave;
     private int _ticks;
-    private double _mainLeft, _mainTop;
+    private double _mainLeft = double.NaN, _mainTop = double.NaN;
     private double _quotaFraction;
     private TimeSpan _lastAppSample;
     private TimeSpan _lastSave;
     private Counter Current => (Counter?)Counters.SelectedItem ?? _counters[0];
 
-    public MainWindow()
+    internal MainWindow(WindowStateData settings, SettingsStore store, AdapterMeter meter, TrayMenu tray,
+        QuotaNotifications notifications, bool mini, string? startupError)
     {
+        _settings = settings;
+        _store = store;
+        _meter = meter;
+        _tray = tray;
+        _notifications = notifications;
+        _mini = mini;
+        _startupError = startupError;
         using var fallback = ApplicationIcon.Stock(2);
         _fallbackIcon = ApplicationIcon.Image(fallback);
         InitializeComponent();
@@ -69,28 +77,21 @@ public partial class MainWindow : Window
     private void OnLoaded(object sender, RoutedEventArgs e)
     {
         if (_ready) return;
-        try { _settings = _store.Load(); }
-        catch (Exception ex) when (ex is System.IO.IOException or System.Text.Json.JsonException or UnauthorizedAccessException)
-        {
-            Feedback.Text = T("ReadStateError");
-            Debug.WriteLine(ex);
-        }
+        if (_startupError is not null) Feedback.Text = T(_startupError);
         LanguageList.ItemsSource = TextCatalog.Languages;
         LanguageList.SelectedValue = TextCatalog.GetLanguage(_settings.Language).Code;
         ApplyLanguage();
-        foreach (var counter in _settings.SavedCounters ?? [])
+        foreach (var counter in _settings.SavedCounters!)
             _counters.Add(counter);
-        if (_counters.Count == 0)
-            _counters.Add(_settings.Counter ?? new Counter { Name = T("TotalCounter") });
         Counters.SelectedItem = _counters.FirstOrDefault(item => item.Id == _settings.Counter?.Id) ?? _counters[0];
         PinDetails.IsChecked = _settings.MainDetails;
         PinMiniDetails.IsChecked = _settings.MiniDetails;
-        Sounds.SelectedIndex = Math.Clamp(_settings.Sound, 0, SoundNames.Length - 1);
+        Sounds.SelectedIndex = Math.Clamp(_settings.Sound, 0, Sounds.Items.Count - 1);
+        StartupCheck.IsChecked = _settings.StartWithWindows;
 
         (_settings.Theme == "Win7" ? AeroThemeOption : XpThemeOption).IsChecked = true;
         SetTheme();
-        _details = _settings.MainDetails || Environment.GetCommandLineArgs().Contains("--handoff");
-        _tray = new TrayMenu(() => ShowPanel(false), () => ShowPanel(true), () => RestoreConnection(this, new()), Quit);
+        _details = _mini ? _settings.MiniDetails : _settings.MainDetails || Environment.GetCommandLineArgs().Contains("--handoff");
         _ready = true;
         ApplyLayout();
         SetCounterFields();
@@ -99,11 +100,11 @@ public partial class MainWindow : Window
             _applicationTraffic = new ApplicationTraffic();
         UpdateDetailsStatus();
         _timer.Start();
-        _ = DiscoverAsync();
+        if (_details) _ = DiscoverAsync();
         if (_isAdmin && Environment.GetCommandLineArgs().Contains("--arm-wifi"))
             Dispatcher.BeginInvoke(() => BlockCheck.IsChecked = true);
         if (_isAdmin && Environment.GetCommandLineArgs().Contains("--restore-wifi"))
-            RestoreConnection(this, new());
+            RestoreConnection();
     }
 
     private void RefreshAdapters()
@@ -111,11 +112,8 @@ public partial class MainWindow : Window
         try
         {
             var list = AdapterChoice.Connected();
-            var selected = list.FirstOrDefault(item => item.Id == _adapter?.Id)
-                ?? list.FirstOrDefault(item => item.Id == _settings.AdapterId)
-                ?? list.FirstOrDefault();
-            if (_settings.WifiRecovery is not null || _wifiQuota is not null)
-                selected = list.FirstOrDefault(item => item.Id == _settings.AdapterId);
+            var pin = _settings.WifiRecovery is not null || _wifiQuota is not null;
+            var selected = AdapterMeter.Preferred(list, pin ? _settings.AdapterId : _adapter?.Id ?? _settings.AdapterId, pin);
 
             var current = Adapters.ItemsSource as IReadOnlyList<AdapterChoice>;
             if (current is null || !current.Select(item => (item.Id, item.Label)).SequenceEqual(list.Select(item => (item.Id, item.Label))) ||
@@ -133,14 +131,16 @@ public partial class MainWindow : Window
             if (_adapter?.Id != selected?.Id)
                 ChangeAdapter(selected);
             else
-                _adapter = selected;
+                _meter.Select(selected);
 
-            if (selected is null)
+            if (selected is not null)
+                _settings.AdapterId = selected.Id;
+            else
                 NetworkStatus.Text = _settings.WifiRecovery is null ? T("NoNetwork") : T("WifiOff");
         }
         catch (NetworkInformationException ex)
         {
-            _previous = null;
+            _meter.Reset();
             NetworkStatus.Text = T("ReadNetworkError");
             Debug.WriteLine(ex);
         }
@@ -157,8 +157,7 @@ public partial class MainWindow : Window
 
     private void ChangeAdapter(AdapterChoice? adapter)
     {
-        _adapter = adapter;
-        _previous = null;
+        _meter.Select(adapter);
         _settings.AdapterId = adapter?.Id ?? _settings.AdapterId;
         NetworkStatus.Text = adapter is null ? T("NoNetwork") : T("AdapterPreparing", adapter.Label);
         DownloadRate.Text = UploadRate.Text = "—";
@@ -183,7 +182,7 @@ public partial class MainWindow : Window
             _measureStatus = measurement.Status;
         }
         UpdateDetailsStatus();
-        _tray?.Update(DownloadRate.Text, UploadRate.Text, QuotaHint.Text);
+        _tray.Update(DownloadRate.Text, UploadRate.Text, QuotaHint.Text);
         if (_pendingSave && _clock.Elapsed - _lastSave >= TimeSpan.FromSeconds(5))
             Save();
     }
@@ -192,11 +191,7 @@ public partial class MainWindow : Window
     {
         try
         {
-            var stats = adapter.Interface.GetIPStatistics();
-            var reading = new TrafficReading(adapter.Id, stats.BytesReceived, stats.BytesSent, _clock.Elapsed);
-            var delta = reading.DifferenceFrom(_previous);
-            _previous = reading;
-            if (delta is not { } sample)
+            if (_meter.Read() is not { } sample)
             {
                 DownloadRate.Text = UploadRate.Text = "—";
                 NetworkStatus.Text = T("AdapterPreparing", adapter.Label);
@@ -213,11 +208,7 @@ public partial class MainWindow : Window
                 if (notification is null)
                     continue;
 
-                Feedback.Text = notification == CounterEvent.Limit
-                    ? T("CounterAtLimit", counter.Name)
-                    : T("CounterNearLimit", counter.Name);
-                PlaySound();
-                _tray?.Notify(Feedback.Text);
+                Feedback.Text = _notifications.Notify(counter, notification.Value, _settings.Sound);
                 Save();
             }
 
@@ -227,7 +218,7 @@ public partial class MainWindow : Window
         }
         catch (Exception ex) when (ex is NetworkInformationException or OverflowException)
         {
-            _previous = null;
+            _meter.Reset();
             NetworkStatus.Text = T("MeasurementInterrupted");
             DownloadRate.Text = UploadRate.Text = "—";
             Debug.WriteLine(ex);
@@ -236,7 +227,7 @@ public partial class MainWindow : Window
 
     private void UpdateAppRows(AppTraffic[] batch, double seconds)
     {
-        var updated = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        _updated.Clear();
         foreach (var item in batch)
         {
             var key = item.Path ?? UnknownApplication;
@@ -249,11 +240,11 @@ public partial class MainWindow : Window
                 _rows.Add(row);
             }
             row.Update(item, seconds);
-            updated.Add(key);
+            _updated.Add(key);
         }
 
         foreach (var (key, row) in _byApplication)
-            if (!updated.Contains(key))
+            if (!_updated.Contains(key))
                 row.Update(null, seconds);
     }
 
@@ -534,13 +525,13 @@ public partial class MainWindow : Window
             radio.Set(entry, enabled: false);
             DownloadRate.Text = UploadRate.Text = "—";
             NetworkStatus.Text = Feedback.Text = T("WifiOff");
-            _tray?.Notify(Feedback.Text);
+            _tray.Notify(Feedback.Text);
         }
         catch (Exception ex) when (ex is Win32Exception or InvalidOperationException)
         {
             RestoreWifi();
             Feedback.Text = T("WifiOffError", ex.Message);
-            _tray?.Notify(Feedback.Text);
+            _tray.Notify(Feedback.Text);
         }
     }
 
@@ -552,7 +543,7 @@ public partial class MainWindow : Window
             using var radio = WifiRadio.Open();
             radio.Set(entry, enabled: true);
             _settings.WifiRecovery = null;
-            _previous = null;
+            _meter.Reset();
             Save();
             return true;
         }
@@ -563,7 +554,9 @@ public partial class MainWindow : Window
         }
     }
 
-    private void RestoreConnection(object sender, RoutedEventArgs e)
+    private void RestoreConnection(object sender, RoutedEventArgs e) => RestoreConnection();
+
+    internal void RestoreConnection()
     {
         if (_settings.WifiRecovery is null) return;
         if (!_isAdmin)
@@ -634,23 +627,24 @@ public partial class MainWindow : Window
         EmptyApps.Text = T("AwaitingConnections");
     }
 
-    internal void RestoreMainPanel() => ShowPanel(false);
-
     private void ToggleMini(object sender, RoutedEventArgs e) => ShowPanel(!_mini);
 
-    private void ShowPanel(bool mini)
+    internal void ShowPanel(bool mini)
     {
         if (!_mini && mini) { _mainLeft = Left; _mainTop = Top; }
         var restore = _mini && !mini;
         SettingsPopup.IsOpen = QuotaPopup.IsOpen = false;
         _mini = mini;
+        _timer.Interval = TimeSpan.FromSeconds(1);
         _details = mini ? _settings.MiniDetails : _settings.MainDetails;
         ApplyLayout();
         if (restore)
         {
             var work = SystemParameters.WorkArea;
-            Left = Math.Clamp(_mainLeft, work.Left, Math.Max(work.Left, work.Right - Width));
-            Top = Math.Clamp(_mainTop, work.Top, Math.Max(work.Top, work.Bottom - Height));
+            Left = double.IsNaN(_mainLeft) ? work.Left + (work.Width - Width) / 2
+                : Math.Clamp(_mainLeft, work.Left, Math.Max(work.Left, work.Right - Width));
+            Top = double.IsNaN(_mainTop) ? work.Top + (work.Height - Height) / 2
+                : Math.Clamp(_mainTop, work.Top, Math.Max(work.Top, work.Bottom - Height));
         }
         Show();
         Activate();
@@ -701,7 +695,7 @@ public partial class MainWindow : Window
         _settings.Language = code;
         ApplyLanguage();
         SetCounterFields();
-        _tray?.Localize();
+        _tray.Localize();
         foreach (var row in _rows) row.RefreshText();
         RefreshAdapters();
         ApplyLayout();
@@ -762,25 +756,22 @@ public partial class MainWindow : Window
         Save();
     }
 
-    private void PreviewSound(object sender, RoutedEventArgs e) => PlaySound();
-
-    private void PlaySound()
+    private void StartupChanged(object sender, RoutedEventArgs e)
     {
-        try
+        if (!_ready) return;
+        var enabled = StartupCheck.IsChecked == true;
+        if (enabled == _settings.StartWithWindows) return;
+        if (!WindowsStartup.SetEnabled(enabled))
         {
-            var index = Math.Clamp(_settings.Sound, 0, SoundNames.Length - 1);
-            var wav = System.Windows.Application.GetResourceStream(new Uri($"Assets/{SoundNames[index]}.wav", UriKind.Relative));
-            if (wav is null) return;
-            _player?.Dispose();
-            _player = new SoundPlayer(wav.Stream);
-            _player.Play();
+            StartupCheck.IsChecked = _settings.StartWithWindows;
+            Feedback.Text = T("StartupWriteError");
+            return;
         }
-        catch (Exception ex) when (ex is InvalidOperationException or System.IO.IOException or TimeoutException)
-        {
-            Debug.WriteLine(ex);
-            SystemSounds.Exclamation.Play();
-        }
+        _settings.StartWithWindows = enabled;
+        Save();
     }
+
+    private void PreviewSound(object sender, RoutedEventArgs e) => _notifications.Play(_settings.Sound);
 
     private bool Save()
     {
@@ -802,7 +793,7 @@ public partial class MainWindow : Window
         }
     }
 
-    private void Quit()
+    internal void Quit()
     {
         _quit = true;
         Close();
@@ -817,16 +808,15 @@ public partial class MainWindow : Window
             e.Cancel = true;
             SettingsPopup.IsOpen = QuotaPopup.IsOpen = false;
             Hide();
-            _tray?.Notify(T("TrayHidden"));
+            if (_wifiQuota is null) _timer.Interval = TrayMonitor.Interval;
+            _tray.Notify(T("TrayHidden"));
             return;
         }
         _quit = true;
         _timer.Stop();
         _helper?.Dispose();
-        _tray?.Dispose();
         if (_isAdmin && _ready) RestoreWifi();
         _applicationTraffic?.Dispose();
-        _player?.Dispose();
         if (_ready) Save();
     }
 }

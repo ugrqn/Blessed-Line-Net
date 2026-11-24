@@ -1,13 +1,22 @@
+using System.Diagnostics;
 using System.Windows;
+using BlessedLine.Core;
 
 namespace BlessedLine.Desktop;
 
 public partial class App : Application
 {
+    private readonly SettingsStore _store = new();
+    private readonly AdapterMeter _meter = new();
+    private WindowStateData _settings = new();
+    private string? _startupError;
     private Mutex? _instance;
     private bool _ownsInstance;
     private EventWaitHandle? _restore;
     private RegisteredWaitHandle? _listener;
+    private TrayMenu? _tray;
+    private TrayMonitor? _monitor;
+    private QuotaNotifications? _notifications;
 
     protected override void OnStartup(StartupEventArgs e)
     {
@@ -17,6 +26,8 @@ public partial class App : Application
             Shutdown();
             return;
         }
+
+        var startInTray = e.Args.Contains(WindowsStartup.TrayArgument);
         _instance = new Mutex(false, @"Local\BlessedLine.Desktop");
         try
         {
@@ -27,34 +38,96 @@ public partial class App : Application
 
         if (!_ownsInstance)
         {
-            try
-            {
-                if (EventWaitHandle.TryOpenExisting(@"Local\BlessedLine.Restore", out var signal))
-                {
-                    using (signal) signal.Set();
-                }
-            }
-            catch (UnauthorizedAccessException)
-            {
-                MessageBox.Show(TextCatalog.Format("AlreadyOpen"), "BlessedLine");
-            }
+            if (!startInTray) SignalExistingWindow();
             Shutdown();
             return;
         }
 
         base.OnStartup(e);
-        var window = new MainWindow();
-        MainWindow = window;
-        window.Show();
+        try { _settings = _store.Load(); }
+        catch (Exception ex) when (ex is System.IO.IOException or System.Text.Json.JsonException or UnauthorizedAccessException)
+        {
+            _startupError = "ReadStateError";
+            Debug.WriteLine(ex);
+        }
+
+        if (_startupError is null && !WindowsStartup.SetEnabled(_settings.StartWithWindows))
+            _startupError = "StartupWriteError";
+
+        if (startInTray && !_settings.StartWithWindows)
+        {
+            Shutdown();
+            return;
+        }
+
+        TextCatalog.Select(_settings.Language);
+        if (_settings.SavedCounters is not { Count: > 0 })
+            _settings.SavedCounters = [_settings.Counter ?? new Counter { Name = TextCatalog.Format("TotalCounter") }];
+        _settings.Counter = _settings.SavedCounters.FirstOrDefault(counter => counter.Id == _settings.Counter?.Id)
+            ?? _settings.SavedCounters[0];
+
         _restore = new EventWaitHandle(false, EventResetMode.AutoReset, @"Local\BlessedLine.Restore");
         _listener = ThreadPool.RegisterWaitForSingleObject(_restore, (_, _) =>
-            Dispatcher.BeginInvoke(window.RestoreMainPanel), null, Timeout.Infinite, false);
+            Dispatcher.BeginInvoke(() => ShowWindow(mini: false)), null, Timeout.Infinite, false);
+        _tray = new TrayMenu(() => ShowWindow(mini: false), () => ShowWindow(mini: true), RestoreWifi, ExitApplication);
+        _notifications = new QuotaNotifications(_tray);
+        if (startInTray)
+            _monitor = new TrayMonitor(_settings, _store, _meter, _tray, _notifications);
+        else
+            ShowWindow(mini: false);
+    }
+
+    private static void SignalExistingWindow()
+    {
+        try
+        {
+            if (EventWaitHandle.TryOpenExisting(@"Local\BlessedLine.Restore", out var signal))
+            {
+                using (signal) signal.Set();
+            }
+        }
+        catch (UnauthorizedAccessException)
+        {
+            MessageBox.Show(TextCatalog.Format("AlreadyOpen"), "BlessedLine");
+        }
+    }
+
+    private void ShowWindow(bool mini)
+    {
+        if (MainWindow is MainWindow existing)
+        {
+            existing.ShowPanel(mini);
+            return;
+        }
+
+        _monitor?.Dispose();
+        _monitor = null;
+        var window = new MainWindow(_settings, _store, _meter, _tray!, _notifications!, mini, _startupError);
+        MainWindow = window;
+        window.Closed += (_, _) => Shutdown();
+        window.Show();
+    }
+
+    private void RestoreWifi()
+    {
+        if (_settings.WifiRecovery is null) return;
+        ShowWindow(mini: false);
+        ((MainWindow)MainWindow).RestoreConnection();
+    }
+
+    private void ExitApplication()
+    {
+        if (MainWindow is MainWindow window) window.Quit();
+        else Shutdown();
     }
 
     protected override void OnExit(ExitEventArgs e)
     {
         _listener?.Unregister(null);
         _restore?.Dispose();
+        _monitor?.Dispose();
+        _notifications?.Dispose();
+        _tray?.Dispose();
         if (_ownsInstance) _instance?.ReleaseMutex();
         _instance?.Dispose();
         base.OnExit(e);

@@ -14,6 +14,7 @@ internal sealed class WindowStateData
     public bool MiniDetails { get; set; }
     public WifiRecovery? WifiRecovery { get; set; }
     public string Language { get; set; } = "tr";
+    public bool StartWithWindows { get; set; } = true;
     public int Sound { get; set; }
 }
 
