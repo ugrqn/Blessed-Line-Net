@@ -178,7 +178,7 @@ jobs:
         if: ${{ !cancelled() }}
         shell: pwsh
         run: |
-          @{ Language = 'tr'; AutoMeasureApplications = $true } | ConvertTo-Json |
+          @{ Language = 'tr'; AutoMeasureApplications = $true; MainDetails = $true } | ConvertTo-Json |
               Set-Content (Join-Path $env:LOCALAPPDATA 'BlessedLine/state.json')
           $identity = [System.Security.Principal.WindowsIdentity]::GetCurrent()
           $principal = [System.Security.Principal.WindowsPrincipal]::new($identity)
@@ -224,7 +224,7 @@ jobs:
               }
               if ($p.MainWindowHandle -eq 0) { throw 'BlessedLine window did not appear.' }
               $window = $element::FromHandle($p.MainWindowHandle)
-              if ((ById $window 'DetailsLabel').Current.Name -eq 'Detayı göster') { (ById $window 'DetailsButton').GetCurrentPattern($invoke).Invoke() }
+              if (!(ById $window 'Applications')) { (ById $window 'DetailsButton').GetCurrentPattern($invoke).Invoke() }
               Start-Sleep -Seconds 2
               $status = (ById $window 'DetailStatus').Current.Name
               Write-Host "Application measurement status: $status"

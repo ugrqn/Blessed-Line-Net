@@ -58,7 +58,8 @@ function Wait-Check([scriptblock] $Predicate, [string] $Name, [int] $Count = 40)
     $feedback = if ($script:window) { (ById $script:window 'Feedback').Current.Name }
     $measurement = if ($script:window) { (ById $script:window 'DetailStatus').Current.Name }
     $detailStatus = (ById $ui::RootElement 'ActionStatus').Current.Name
-    throw "Timed out: $Name. Feedback: $feedback. Action: $detailStatus. Measurement: $measurement"
+    $rule = FixtureRule | ConvertTo-Json -Compress
+    throw "Timed out: $Name. Feedback: $feedback. Action: $detailStatus. Measurement: $measurement. Fixture rule: $rule"
 }
 
 function Fixture-Request {
@@ -68,7 +69,7 @@ function Fixture-Request {
 }
 
 function Start-FixtureTransfer {
-    return Start-Process -FilePath $fixture -ArgumentList @('--silent','--show-error','--fail','--limit-rate','12k','--max-time','32',
+    return Start-Process -FilePath $fixture -ArgumentList @('--silent','--show-error','--fail','--limit-rate','8k','--max-time','45',
         '--output','NUL',$uri) -PassThru
 }
 
@@ -164,11 +165,12 @@ try {
     Check ($qos.Count -eq 1 -and $qos[0].AppPathName -ieq $fixture) 'Windows NetQoS installed the rule for the exact executable'
 
     $quota = ById $ui::RootElement 'AppQuotaInput'
+    $budgetTransfer = Start-FixtureTransfer
+    Start-Sleep -Milliseconds 1600
     $quota.GetCurrentPattern($valuePattern).SetValue('0,03')
     (ById $ui::RootElement 'ApplyAppQuota').GetCurrentPattern($invoke).Invoke()
     Wait-Check { (FixtureRule).QuotaBytes -eq 30000 } 'Individual data quota saves decimal MB'
-    $budgetTransfer = Start-FixtureTransfer
-    Wait-Check { (FixtureRule).BudgetBlocked -eq $true } 'Attributed traffic triggers automatic per-app cutoff'
+    Wait-Check { (FixtureRule).BudgetBlocked -eq $true } 'Attributed traffic triggers automatic per-app cutoff' 70
     Stop-Transfer $budgetTransfer
     $blocks = @(Get-NetFirewallRule -Group $group)
     Check ($blocks.Count -eq 2 -and @($blocks | Get-NetFirewallApplicationFilter | Where-Object Program -EQ $fixture).Count -eq 2) 'Windows Firewall records both directions for the chosen executable'
