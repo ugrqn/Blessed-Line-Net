@@ -1,13 +1,16 @@
 name: BlessedLine Windows smoke test
 on:
   push:
-    branches: [main, revision/desktop-030]
+    branches: [main, 'revision/**']
+    tags: ['v*-preview']
 permissions:
   contents: read
 jobs:
   windows:
     runs-on: windows-2025
     timeout-minutes: 12
+    env:
+      BLESSED_EXE: ./src/BlessedLine.Desktop/bin/Release/net10.0-windows/BlessedLine.exe
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-dotnet@v4
@@ -19,12 +22,37 @@ jobs:
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           dotnet test BlessedLine.slnx -c Release --no-build
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+      - name: Get the downloadable package for this release
+        if: startsWith(github.ref, 'refs/tags/v')
+        uses: actions/checkout@v4
+        with:
+          ref: downloads
+          path: release-files
+          sparse-checkout: |
+            /*.7z
+          sparse-checkout-cone-mode: false
+      - name: Test the packaged executable on release tags
+        if: startsWith(github.ref, 'refs/tags/v')
+        shell: pwsh
+        run: |
+          $version = $env:GITHUB_REF_NAME -replace '^v','' -replace '-preview$',''
+          $archive = "release-files/BlessedLine-$version-win-x64.7z"
+          Get-FileHash $archive -Algorithm SHA256
+          & 7z x $archive -oportable
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          $exe = (Resolve-Path 'portable/BlessedLine/BlessedLine.exe').Path
+          "BLESSED_EXE=$exe" >> $env:GITHUB_ENV
       - name: Start the WPF application and exercise the mini panel
         shell: pwsh
         run: |
           Add-Type -AssemblyName UIAutomationClient, UIAutomationTypes
           $e = [System.Windows.Automation.AutomationElement]
-          $p = Start-Process -FilePath './src/BlessedLine.Desktop/bin/Release/net10.0-windows/BlessedLine.exe' -PassThru
+          # Seed a quota large enough to remain active throughout the panel check.
+          $profile = Join-Path $env:LOCALAPPDATA 'BlessedLine'
+          New-Item $profile -ItemType Directory -Force | Out-Null
+          @{ Counter = @{ Name = 'Toplam sayaç'; UsedBytes = 500000000; LimitBytes = 1000000000 } } |
+              ConvertTo-Json | Set-Content (Join-Path $profile 'state.json')
+          $p = Start-Process -FilePath $env:BLESSED_EXE -PassThru
           try {
               for ($i = 0; $i -lt 30; $i++) {
                   Start-Sleep -Milliseconds 500
@@ -43,6 +71,8 @@ jobs:
               $mini.GetCurrentPattern($invoke).Invoke()
               Start-Sleep -Milliseconds 700
               $compact = $window.Current.BoundingRectangle
+              $hint = $window.FindFirst([System.Windows.Automation.TreeScope]::Descendants, [System.Windows.Automation.PropertyCondition]::new($e::AutomationIdProperty, 'QuotaHint'))
+              if ($hint.Current.Name -notlike '*kaldı*') { throw 'The compact bar did not show remaining quota.' }
               if ($compact.Width -ge $main.Width -or $compact.Height -ge $main.Height) { throw "Mini panel did not shrink, got $compact." }
               $mini.GetCurrentPattern($invoke).Invoke()
               Start-Sleep -Milliseconds 700
@@ -115,7 +145,7 @@ jobs:
               $names
           }
 
-          $p = Start-Process -FilePath './src/BlessedLine.Desktop/bin/Release/net10.0-windows/BlessedLine.exe' -PassThru
+          $p = Start-Process -FilePath $env:BLESSED_EXE -PassThru
           $curl = $null
           try {
               for ($i = 0; $i -lt 30; $i++) {
@@ -151,6 +181,8 @@ jobs:
               if (-not ($names | Where-Object { $_ -match '^[1-9].* KB$' })) {
                   throw 'No nonzero KB-scale rate or transfer total was visible.'
               }
+              $icons = $grid.FindAll($scope, [System.Windows.Automation.PropertyCondition]::new($element::ControlTypeProperty, [System.Windows.Automation.ControlType]::Image))
+              if ($icons.Count -lt 2) { throw 'Application icons missing from the measured rows.' }
               Write-Host 'Real TCP traffic was attributed to curl and PowerShell.'
           } finally {
               if ($curl -and -not $curl.HasExited) { $curl.Kill() }
@@ -163,7 +195,7 @@ jobs:
         if: ${{ !cancelled() }}
         shell: pwsh
         run: |
-          $exe = (Resolve-Path './src/BlessedLine.Desktop/bin/Release/net10.0-windows/BlessedLine.exe').Path
+          $exe = (Resolve-Path $env:BLESSED_EXE).Path
           $uri = 'https://raw.githubusercontent.com/microsoft/win32metadata/main/generation/WinSDK/RecompiledIdlHeaders/um/fwpmu.h'
           Add-Type -AssemblyName UIAutomationClient, UIAutomationTypes
           $element = [System.Windows.Automation.AutomationElement]
