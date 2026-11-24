@@ -1,0 +1,261 @@
+using System.ComponentModel;
+using System.Diagnostics;
+using System.Globalization;
+using System.IO;
+using System.Runtime.InteropServices;
+using System.Security.Cryptography;
+using System.Text;
+
+namespace BlessedLine.Desktop;
+
+internal enum PolicyOperation { Block, Upload, ClearAll }
+
+internal sealed record PolicyRequest(PolicyOperation Operation, string? Path = null, long Value = 0);
+internal sealed record PolicyResult(bool Success, string? Error = null);
+
+internal sealed class AppPolicyRule
+{
+    public bool Blocked { get; set; }
+    public long UploadKbps { get; set; }
+    public long QuotaBytes { get; set; }
+    public long UsedBytes { get; set; }
+    public bool BudgetBlocked { get; set; }
+    internal bool IsBlocked => Blocked || BudgetBlocked;
+    internal bool IsEmpty => !IsBlocked && UploadKbps == 0 && QuotaBytes == 0;
+}
+
+internal static class ApplicationPolicy
+{
+    private const string Group = "BlessedLine.AppControls";
+    internal const long MaximumUploadKbps = 10_000_000;
+    private static readonly HashSet<string> SharedHosts = new(StringComparer.OrdinalIgnoreCase)
+    {
+        "svchost.exe", "System", "lsass.exe", "services.exe", "winlogon.exe", "csrss.exe", "smss.exe",
+        "wininit.exe", "fontdrvhost.exe", "dwm.exe", "RuntimeBroker.exe", "ApplicationFrameHost.exe",
+        "BlessedLine.exe"
+    };
+
+    internal static bool IsControllable(string? path)
+    {
+        if (string.IsNullOrWhiteSpace(path) || path.Length is < 8 or > 1024 ||
+            path[1] != ':' || path[2] != '\\' || !Path.IsPathFullyQualified(path)) return false;
+        try
+        {
+            return string.Equals(Path.GetFullPath(path), path, StringComparison.OrdinalIgnoreCase) &&
+                string.Equals(Path.GetExtension(path), ".exe", StringComparison.OrdinalIgnoreCase) &&
+                !SharedHosts.Contains(Path.GetFileName(path));
+        }
+        catch (Exception ex) when (ex is ArgumentException or NotSupportedException or PathTooLongException) { return false; }
+    }
+
+    private static string NameFor(string path) =>
+        Group + "." + Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(path.ToUpperInvariant())))[..24];
+
+    internal static async Task<PolicyResult> ExecuteAsync(PolicyRequest request)
+    {
+        if (!Enum.IsDefined(request.Operation) ||
+            (request.Operation != PolicyOperation.ClearAll && !IsControllable(request.Path)))
+            return new(false, "InvalidAppPolicy");
+        if ((request.Operation == PolicyOperation.Block && request.Value is not (0 or 1)) ||
+            (request.Operation == PolicyOperation.Upload && (request.Value < 0 || request.Value > MaximumUploadKbps)))
+            return new(false, "InvalidAppPolicy");
+
+        try
+        {
+            switch (request.Operation)
+            {
+                case PolicyOperation.Block:
+                    SetBlock(request.Path!, request.Value != 0);
+                    break;
+                case PolicyOperation.Upload:
+                    await SetUploadAsync(NameFor(request.Path!), request.Path!, request.Value).ConfigureAwait(false);
+                    break;
+                case PolicyOperation.ClearAll:
+                    var qosError = await TryClearAllUploadAsync().ConfigureAwait(false);
+                    ClearAllBlocks();
+                    if (qosError is not null) return new(false, qosError);
+                    break;
+            }
+            return new(true);
+        }
+        catch (Exception ex) when (ex is COMException or Win32Exception or UnauthorizedAccessException or IOException or
+                                   InvalidOperationException or NotSupportedException or System.Reflection.TargetInvocationException or
+                                   Microsoft.CSharp.RuntimeBinder.RuntimeBinderException)
+        {
+            Debug.WriteLine(ex);
+            return new(false, ex.Message);
+        }
+    }
+
+    private static object Activate(string progId) => Activator.CreateInstance(Type.GetTypeFromProgID(progId, throwOnError: true)!)
+        ?? throw new InvalidOperationException(progId);
+
+    private static void SetBlock(string path, bool block)
+    {
+        var id = NameFor(path);
+        object policy = Activate("HNetCfg.FwPolicy2");
+        object? rules = null;
+        try
+        {
+            rules = ((dynamic)policy).Rules;
+            var outName = id + ".Out";
+            var inName = id + ".In";
+            if (!block)
+            {
+                RemoveRule(rules, inName);
+                RemoveRule(rules, outName);
+                return;
+            }
+            var newOutbound = false;
+            try
+            {
+                newOutbound = AddRule(rules, outName, path, 2);
+                AddRule(rules, inName, path, 1);
+            }
+            catch
+            {
+                if (newOutbound) RemoveRule(rules, outName);
+                throw;
+            }
+        }
+        finally
+        {
+            if (rules is not null) Marshal.ReleaseComObject(rules);
+            Marshal.ReleaseComObject(policy);
+        }
+    }
+
+    private static bool AddRule(object rules, string name, string path, int direction)
+    {
+        if (RuleExists(rules, name)) return false;
+        object rule = Activate("HNetCfg.FWRule");
+        try
+        {
+            dynamic settings = rule;
+            settings.Name = name;
+            settings.Grouping = Group;
+            settings.ApplicationName = path;
+            settings.Direction = direction;
+            settings.Protocol = 256; // NET_FW_IP_PROTOCOL_ANY
+            settings.RemoteAddresses = "Internet";
+            settings.Action = 0; // NET_FW_ACTION_BLOCK
+            settings.Profiles = 7; // domain, private, public
+            settings.Enabled = true;
+            ((dynamic)rules).Add(rule);
+            return true;
+        }
+        finally { Marshal.ReleaseComObject(rule); }
+    }
+
+    private static bool RuleExists(object rules, string name)
+    {
+        try
+        {
+            object rule = ((dynamic)rules).Item(name);
+            Marshal.ReleaseComObject(rule);
+            return true;
+        }
+        catch (COMException ex) when (ex.HResult == unchecked((int)0x80070002)) { return false; }
+    }
+
+    private static void RemoveRule(object rules, string name)
+    {
+        if (RuleExists(rules, name)) ((dynamic)rules).Remove(name);
+    }
+
+    private static void ClearAllBlocks()
+    {
+        object policy = Activate("HNetCfg.FwPolicy2");
+        object? rules = null;
+        try
+        {
+            rules = ((dynamic)policy).Rules;
+            var names = new List<string>();
+            foreach (object rule in (System.Collections.IEnumerable)rules)
+            {
+                try
+                {
+                    dynamic item = rule;
+                    string name = item.Name;
+                    if ((string)item.Grouping == Group && name.StartsWith(Group + ".", StringComparison.Ordinal))
+                        names.Add(name);
+                }
+                finally { Marshal.ReleaseComObject(rule); }
+            }
+            foreach (var name in names) RemoveRule(rules, name);
+        }
+        finally
+        {
+            if (rules is not null) Marshal.ReleaseComObject(rules);
+            Marshal.ReleaseComObject(policy);
+        }
+    }
+
+    private static async Task SetUploadAsync(string name, string path, long kbps)
+    {
+        var ruleName = Quote(name);
+        var pathBase64 = Convert.ToBase64String(Encoding.Unicode.GetBytes(path));
+        var rate = (kbps * 1000).ToString(CultureInfo.InvariantCulture);
+        var query = $"$app = [Text.Encoding]::Unicode.GetString([Convert]::FromBase64String('{pathBase64}')); " +
+            $"$q = Get-NetQosPolicy -Name {ruleName} -ErrorAction SilentlyContinue;";
+        var command = kbps == 0
+            ? $"if ($q) {{ Remove-NetQosPolicy -Name {ruleName} -Confirm:$false }}"
+            : $"if ($q) {{ Set-NetQosPolicy -Name {ruleName} -AppPathNameMatchCondition $app -ThrottleRateActionBitsPerSecond {rate} -Confirm:$false }} " +
+              $"else {{ New-NetQosPolicy -Name {ruleName} -AppPathNameMatchCondition $app -ThrottleRateActionBitsPerSecond {rate} | Out-Null }}";
+        await PowerShellAsync(query + command).ConfigureAwait(false);
+    }
+
+    private static async Task<string?> TryClearAllUploadAsync()
+    {
+        try
+        {
+            await PowerShellAsync("if (Get-Command Get-NetQosPolicy -ErrorAction SilentlyContinue) {" +
+                $"Get-NetQosPolicy | Where-Object {{ $_.Name -match '^BlessedLine\\.AppControls\\.[0-9A-F]{{24}}$' }} " +
+                "| ForEach-Object { Remove-NetQosPolicy -Name $_.Name -Confirm:$false }}").ConfigureAwait(false);
+            return null;
+        }
+        catch (Exception ex) when (ex is Win32Exception or InvalidOperationException or IOException)
+        {
+            Debug.WriteLine(ex);
+            return ex.Message;
+        }
+    }
+
+    private static string Quote(string value) => "'" + value.Replace("'", "''") + "'";
+
+    private static async Task PowerShellAsync(string script)
+    {
+        var windows = Environment.GetFolderPath(Environment.SpecialFolder.Windows);
+        var native = Environment.Is64BitOperatingSystem && !Environment.Is64BitProcess ? "Sysnative" : "System32";
+        var executable = Path.Combine(windows, native, "WindowsPowerShell", "v1.0", "powershell.exe");
+        var encoded = Convert.ToBase64String(Encoding.Unicode.GetBytes(
+            "$ErrorActionPreference = 'Stop'; $ProgressPreference = 'SilentlyContinue'; " + script));
+        using var process = Process.Start(new ProcessStartInfo(executable,
+            $"-NoLogo -NoProfile -NonInteractive -EncodedCommand {encoded}")
+        {
+            UseShellExecute = false,
+            CreateNoWindow = true,
+            RedirectStandardOutput = true,
+            RedirectStandardError = true
+        }) ?? throw new InvalidOperationException("Windows PowerShell");
+        var output = process.StandardOutput.ReadToEndAsync();
+        var error = process.StandardError.ReadToEndAsync();
+        using var timeout = new CancellationTokenSource(TimeSpan.FromSeconds(20));
+        try { await process.WaitForExitAsync(timeout.Token).ConfigureAwait(false); }
+        catch (OperationCanceledException)
+        {
+            if (!process.HasExited) process.Kill(entireProcessTree: true);
+            throw new InvalidOperationException(TextCatalog.Format("PolicyTimeout"));
+        }
+
+        await output.ConfigureAwait(false);
+        var standardError = await error.ConfigureAwait(false);
+        if (process.ExitCode != 0)
+        {
+            // Encoded-command diagnostics may use CLIXML. Keep status feedback bounded.
+            var message = standardError.StartsWith("#< CLIXML", StringComparison.Ordinal)
+                ? "Windows NetQoS" : standardError.Trim();
+            throw new InvalidOperationException(message.Length > 200 ? message[..200] : message);
+        }
+    }
+}

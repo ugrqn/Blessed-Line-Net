@@ -50,6 +50,9 @@ internal static class TextCatalog
         return Format(fields[0]);
     }
 
+    internal static string StatusOrLiteral(string? status) =>
+        status is null ? "" : Catalogs[_language.Code].GetValueOrDefault(status, status);
+
     public static string Bytes(long bytes) => Units.Format(bytes, Culture);
 
     public static ResourceDictionary WindowResources()

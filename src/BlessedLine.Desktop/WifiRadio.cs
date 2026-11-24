@@ -6,7 +6,7 @@ namespace BlessedLine.Desktop;
 
 internal sealed record WifiRecovery(Guid Adapter, Guid Counter, uint[] EnabledPhys, string? Profile = null);
 
-internal sealed class WifiRadio : SafeHandleZeroOrMinusOneIsInvalid
+internal sealed partial class WifiRadio : SafeHandleZeroOrMinusOneIsInvalid
 {
     private const uint RadioState = 4; // wlan_intf_opcode_radio_state
     private const uint CurrentConnection = 7; // wlan_intf_opcode_current_connection

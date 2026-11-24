@@ -27,6 +27,7 @@ public partial class MainWindow : Window
     private readonly TrayMenu _tray;
     private readonly TrafficMeasurement _measurement;
     private readonly WifiControl _wifi;
+    private readonly AppPolicyController _policies;
     private bool _syncingWifi;
     private bool _quit, _discoveryPending, _sessionEnding;
     private string _measureStatus = "ConnectionsOnly";
@@ -48,7 +49,7 @@ public partial class MainWindow : Window
     private Counter Current => (Counter?)Counters.SelectedItem ?? _counters[0];
 
     internal MainWindow(WindowStateData settings, SettingsStore store, AdapterMeter meter, TrayMenu tray,
-        QuotaNotifications notifications, TrafficMeasurement measurement, WifiControl wifi, bool mini, string? startupError)
+        QuotaNotifications notifications, TrafficMeasurement measurement, WifiControl wifi, AppPolicyController policies, bool mini, string? startupError)
     {
         _settings = settings;
         _store = store;
@@ -57,6 +58,7 @@ public partial class MainWindow : Window
         _notifications = notifications;
         _measurement = measurement;
         _wifi = wifi;
+        _policies = policies;
         _mini = mini;
         _startupError = startupError;
         using var fallback = ApplicationIcon.Stock(2);
@@ -95,10 +97,12 @@ public partial class MainWindow : Window
         (_settings.Theme == "Win7" ? AeroThemeOption : XpThemeOption).IsChecked = true;
         SetTheme();
         _details = _mini ? _settings.MiniDetails : _settings.MainDetails || Environment.GetCommandLineArgs().Contains("--handoff");
+        SetupAppControls();
         _ready = true;
         ApplyLayout();
         SetCounterFields();
         RefreshAdapters();
+        UpdatePing();
         UpdateDetailsStatus();
         _timer.Start();
         if (_details) _ = DiscoverAsync();
@@ -161,7 +165,7 @@ public partial class MainWindow : Window
         _meter.Select(adapter);
         _settings.AdapterId = adapter?.Id ?? _settings.AdapterId;
         NetworkStatus.Text = adapter is null ? T("NoNetwork") : T("AdapterPreparing", adapter.Label);
-        DownloadRate.Text = UploadRate.Text = "—";
+        DownloadRate.Text = UploadRate.Text = PingValue.Text = "—";
     }
 
     private void Sample()
@@ -171,15 +175,20 @@ public partial class MainWindow : Window
         if (_settings.WifiRecovery is null && _adapter is { } adapter)
             SampleAdapter(adapter);
 
-        if (_ticks % 3 == 0 && (_details && IsVisible))
-            _ = DiscoverAsync();
+        if (_ticks % 3 == 0 && IsVisible)
+        {
+            UpdatePing();
+            if (_details) _ = DiscoverAsync();
+        }
 
         var reading = _measurement.Drain();
         if (reading is { } measurement)
         {
             var elapsed = _lastAppSample is { } last ? (_clock.Elapsed - last).TotalSeconds : 0;
             _lastAppSample = _clock.Elapsed;
+            _policies.Observe(measurement.Traffic);
             UpdateAppRows(measurement.Traffic, elapsed > 0 && elapsed < 10 ? elapsed : 0);
+            _appDetails?.Sample();
             _measureStatus = measurement.Status;
         }
         UpdateDetailsStatus();
@@ -236,9 +245,7 @@ public partial class MainWindow : Window
             {
                 if (_rows.Count >= 2048 && key != UnknownApplication)
                     continue;
-                row = new ApplicationRow(item.Path, _fallbackIcon);
-                _byApplication.Add(key, row);
-                _rows.Add(row);
+                row = AddAppRow(item.Path);
             }
             row.Update(item, seconds);
             _updated.Add(key);
@@ -263,13 +270,12 @@ public partial class MainWindow : Window
                 _connected.Add(app.Path);
                 if (!_byApplication.TryGetValue(app.Path, out var row))
                 {
-                    row = new ApplicationRow(app.Path, _fallbackIcon);
-                    _byApplication.Add(app.Path, row);
-                    _rows.Add(row);
+                    if (_rows.Count >= 2048) continue;
+                    row = AddAppRow(app.Path);
                 }
                 row.SetAppId(app.AppId);
             }
-            foreach (var row in _rows.Where(row => row.Total == 0 && row.Path is not null && !_connected.Contains(row.Path)).ToArray())
+            foreach (var row in _rows.Where(row => row.Total == 0 && !row.Favorite && !row.HasControls && row.Path is not null && !_connected.Contains(row.Path)).ToArray())
             {
                 _rows.Remove(row);
                 _byApplication.Remove(row.Path!);
@@ -814,6 +820,9 @@ public partial class MainWindow : Window
         }
         _quit = true;
         _timer.Stop();
+        _ping.Dispose();
+        _policies.Changed -= RefreshPolicyRows;
+        _policies.Failed -= ReportPolicyError;
         if (_isAdmin && _ready) _wifi.Restore(reconnect: false);
         if (_ready) Save();
     }

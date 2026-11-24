@@ -15,10 +15,11 @@ internal sealed class TrayMonitor : IDisposable
     private readonly TrayMenu _tray;
     private readonly QuotaNotifications _notifications;
     private readonly WifiControl _wifi;
+    private readonly AppPolicyController _policies;
     private bool _dirty;
     private int _ticks;
 
-    internal TrayMonitor(WindowStateData settings, SettingsStore store, AdapterMeter meter, TrayMenu tray, QuotaNotifications notifications, WifiControl wifi)
+    internal TrayMonitor(WindowStateData settings, SettingsStore store, AdapterMeter meter, TrayMenu tray, QuotaNotifications notifications, WifiControl wifi, AppPolicyController policies)
     {
         _settings = settings;
         _store = store;
@@ -26,6 +27,7 @@ internal sealed class TrayMonitor : IDisposable
         _tray = tray;
         _notifications = notifications;
         _wifi = wifi;
+        _policies = policies;
         _timer.Tick += Sample;
         Sample(this, EventArgs.Empty);
         _timer.Start();
@@ -33,6 +35,7 @@ internal sealed class TrayMonitor : IDisposable
 
     private void Sample(object? sender, EventArgs args)
     {
+        _policies.MeasureInTray();
         try
         {
             if (_settings.WifiRecovery is not null)

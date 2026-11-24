@@ -1,6 +1,7 @@
 <Project Sdk="Microsoft.NET.Sdk">
   <PropertyGroup>
     <OutputType>WinExe</OutputType>
+    <StartupObject>BlessedLine.Desktop.Program</StartupObject>
     <TargetFramework>net10.0-windows</TargetFramework>
     <UseWPF>true</UseWPF>
     <EnableWindowsTargeting>true</EnableWindowsTargeting>
@@ -11,7 +12,7 @@
     <UseWindowsForms>true</UseWindowsForms>
     <SatelliteResourceLanguages>tr</SatelliteResourceLanguages>
     <Product>BlessedLine</Product>
-    <Version>0.5.0</Version>
+    <Version>0.6.0</Version>
     <ApplicationIcon>Assets/BlessedLine.ico</ApplicationIcon>
   </PropertyGroup>
   <ItemGroup>

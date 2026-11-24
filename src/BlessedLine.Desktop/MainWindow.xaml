@@ -25,6 +25,10 @@
                     </DrawingGroup>
                 </DrawingImage.Drawing>
             </DrawingImage>
+            <ContextMenu x:Key="AppRowContextMenu" DataContext="{Binding PlacementTarget.DataContext, RelativeSource={RelativeSource Self}}">
+                <MenuItem Header="{DynamicResource L_AppDetails}" Click="OpenRowMenuDetails"/>
+                <MenuItem Header="{Binding FavoriteLabel}" IsEnabled="{Binding CanControl}" Click="ToggleFavorite"/>
+            </ContextMenu>
             <Style x:Key="Pane" TargetType="Border">
                 <Setter Property="BorderThickness" Value="1"/><Setter Property="BorderBrush" Value="{DynamicResource Line}"/>
                 <Setter Property="CornerRadius" Value="{DynamicResource PaneRadius}"/><Setter Property="Background" Value="{DynamicResource Surface}"/>
@@ -51,6 +55,8 @@
                     <Button x:Name="SettingsButton" DockPanel.Dock="Right" Click="OpenSettings" Margin="6,0,0,0" AutomationProperties.Name="{DynamicResource L_Settings}">
                         <StackPanel Orientation="Horizontal"><Image Source="{StaticResource SettingsIcon}" Width="14" Height="14" Margin="0,0,4,0"/><TextBlock Text="{DynamicResource L_SettingsEllipsis}"/></StackPanel>
                     </Button>
+                    <Button x:Name="WifiInfoButton" DockPanel.Dock="Right" Click="OpenWifiInfo" Margin="6,0,0,0"
+                            Content="{DynamicResource L_WifiInfo}"/>
                     <ComboBox x:Name="Adapters" DockPanel.Dock="Right" MinWidth="98" MaxWidth="135" DisplayMemberPath="Label" SelectionChanged="AdapterChanged" AutomationProperties.Name="{DynamicResource L_Connection}"/>
                     <TextBlock x:Name="NetworkStatus" Text="{DynamicResource L_FindingNetworks}" Foreground="{DynamicResource Muted}" VerticalAlignment="Center" TextTrimming="CharacterEllipsis"/>
                 </DockPanel>
@@ -77,14 +83,17 @@
                     </StackPanel>
                 </Border>
                 <Grid x:Name="RatesPanel" DockPanel.Dock="Top" Margin="4,0,4,8">
-                    <Grid.ColumnDefinitions><ColumnDefinition/><ColumnDefinition/></Grid.ColumnDefinitions>
+                    <Grid.ColumnDefinitions><ColumnDefinition/><ColumnDefinition/><ColumnDefinition/></Grid.ColumnDefinitions>
                     <StackPanel><TextBlock Text="{DynamicResource L_Download}" Foreground="{DynamicResource Muted}"/><TextBlock x:Name="DownloadRate" FontWeight="Bold" FontSize="17" Text="—"/></StackPanel>
                     <StackPanel Grid.Column="1"><TextBlock Text="{DynamicResource L_Upload}" Foreground="{DynamicResource Muted}"/><TextBlock x:Name="UploadRate" Text="—" FontWeight="Bold" FontSize="17"/></StackPanel>
+                    <StackPanel Grid.Column="2" ToolTip="{DynamicResource L_PingTarget}"><TextBlock Text="Ping" Foreground="{DynamicResource Muted}"/>
+                        <TextBlock x:Name="PingValue" Text="—" FontWeight="Bold" FontSize="17"/></StackPanel>
                 </Grid>
                 <Grid x:Name="MiniRates" DockPanel.Dock="Top" Visibility="Collapsed">
-                    <Grid.ColumnDefinitions><ColumnDefinition/><ColumnDefinition/></Grid.ColumnDefinitions>
+                    <Grid.ColumnDefinitions><ColumnDefinition/><ColumnDefinition/><ColumnDefinition/></Grid.ColumnDefinitions>
                     <TextBlock FontWeight="Bold"><Run Text="↓ "/><Run Text="{Binding Text, ElementName=DownloadRate, Mode=OneWay}"/></TextBlock>
                     <TextBlock Grid.Column="1" FontWeight="Bold"><Run Text="↑ "/><Run Text="{Binding Text, ElementName=UploadRate, Mode=OneWay}"/></TextBlock>
+                    <TextBlock Grid.Column="2" FontWeight="Bold" ToolTip="{DynamicResource L_PingTarget}"><Run Text="Ping "/><Run Text="{Binding Text, ElementName=PingValue, Mode=OneWay}"/></TextBlock>
                 </Grid>
                 <TextBlock x:Name="Feedback" DockPanel.Dock="Bottom" FontSize="11" Margin="0,3,0,0" Foreground="{DynamicResource Muted}" TextWrapping="Wrap"/>
                 <Popup x:Name="QuotaPopup" PlacementTarget="{Binding ElementName=EditQuotaButton}" Placement="Bottom" StaysOpen="False" AllowsTransparency="True">
@@ -125,6 +134,8 @@
                             <CheckBox x:Name="PinMiniDetails" Content="{DynamicResource L_AppsInMini}" Click="RememberDetails" Margin="0,0,0,10"/>
                             <CheckBox x:Name="StartupCheck" Content="{DynamicResource L_StartWithWindows}" Checked="StartupChanged" Unchecked="StartupChanged" Margin="0,0,0,10"/>
                             <CheckBox x:Name="AutoMeasureCheck" Content="{DynamicResource L_AutoMeasure}" Checked="AutoMeasureChanged" Unchecked="AutoMeasureChanged" Margin="0,0,0,10"/>
+                            <CheckBox x:Name="UsageColors" Content="{DynamicResource L_UsageColors}" Checked="UsageColorsChanged"
+                                      Unchecked="UsageColorsChanged" ToolTip="{DynamicResource L_UsageLegend}" Margin="0,0,0,10"/>
                             <TextBlock Text="{DynamicResource L_AlertSound}" Margin="0,0,0,4"/>
                             <DockPanel><Button DockPanel.Dock="Right" Content="{DynamicResource L_PreviewSound}" Click="PreviewSound" Margin="4,0,0,0"/>
                                 <ComboBox x:Name="Sounds" SelectionChanged="SoundChanged"><ComboBoxItem Content="{DynamicResource L_StandardSound}"/><ComboBoxItem Content="{DynamicResource L_SoftSound}"/><ComboBoxItem Content="{DynamicResource L_StrongSound}"/></ComboBox></DockPanel>
@@ -133,6 +144,9 @@
                 </Popup>
                 <DockPanel x:Name="AppsPanel">
                     <DockPanel DockPanel.Dock="Top" Margin="0,2,0,4">
+                        <Button x:Name="ClearPoliciesButton" DockPanel.Dock="Right" Click="ClearAllPolicies"
+                                FontFamily="Segoe MDL2 Assets" Content="&#xE777;" Width="27" Margin="5,0,0,0"
+                                ToolTip="{DynamicResource L_ClearAllPolicies}" AutomationProperties.Name="{DynamicResource L_ClearAllPolicies}"/>
                         <Button x:Name="DetailsButton" DockPanel.Dock="Right" Click="ToggleDetails"><TextBlock x:Name="DetailsLabel"/></Button>
                         <Button x:Name="AuthorizeButton" DockPanel.Dock="Right" Content="{DynamicResource L_MeasureRates}" Click="Authorize" Margin="0,0,5,0"/>
                         <TextBlock Text="{DynamicResource L_Applications}" FontWeight="Bold" FontSize="14" VerticalAlignment="Center"/>
@@ -143,20 +157,47 @@
                                   CanUserReorderColumns="False" HeadersVisibility="Column" RowHeight="26" ColumnHeaderHeight="23"
                                   BorderBrush="{DynamicResource Line}" Background="{DynamicResource Surface}" RowBackground="{DynamicResource Surface}"
                                   AlternatingRowBackground="{DynamicResource Alternate}" GridLinesVisibility="None" EnableRowVirtualization="True"
-                                  HorizontalScrollBarVisibility="Auto" FontSize="11">
+                                  HorizontalScrollBarVisibility="Auto" FontSize="11" Sorting="SortApplicationColumn" PreviewKeyDown="AppListKeyDown">
+                            <DataGrid.RowStyle>
+                                <Style TargetType="DataGridRow">
+                                    <EventSetter Event="MouseDoubleClick" Handler="OpenRowDetails"/>
+                                    <Setter Property="ContextMenu" Value="{StaticResource AppRowContextMenu}"/>
+                                    <Style.Triggers>
+                                        <DataTrigger Binding="{Binding UsageLevel}" Value="1"><Setter Property="Background" Value="#FFF3D6"/></DataTrigger>
+                                        <DataTrigger Binding="{Binding UsageLevel}" Value="2"><Setter Property="Background" Value="#FCE7E7"/></DataTrigger>
+                                    </Style.Triggers>
+                                </Style>
+                            </DataGrid.RowStyle>
                             <DataGrid.Columns>
                                 <DataGridTemplateColumn x:Name="AppColumn0" Header="" Width="*" MinWidth="100" SortMemberPath="Name">
                                     <DataGridTemplateColumn.CellTemplate><DataTemplate>
                                         <Grid ToolTip="{Binding Details}"><Grid.ColumnDefinitions><ColumnDefinition Width="26"/><ColumnDefinition/></Grid.ColumnDefinitions>
                                             <Image Source="{Binding Icon}" Width="16" Height="16"/>
-                                            <TextBlock Grid.Column="1" Text="{Binding Name}" VerticalAlignment="Center" TextTrimming="CharacterEllipsis"/>
+                                            <DockPanel Grid.Column="1">
+                                                <TextBlock DockPanel.Dock="Left" Text="★" Foreground="#80560C" Margin="0,0,3,0">
+                                                    <TextBlock.Style>
+                                                        <Style TargetType="TextBlock">
+                                                            <Setter Property="Visibility" Value="Collapsed"/>
+                                                            <Style.Triggers><DataTrigger Binding="{Binding Favorite}" Value="True"><Setter Property="Visibility" Value="Visible"/></DataTrigger></Style.Triggers>
+                                                        </Style>
+                                                    </TextBlock.Style>
+                                                </TextBlock>
+                                                <TextBlock Text="{Binding Name}" VerticalAlignment="Center" TextTrimming="CharacterEllipsis"/>
+                                            </DockPanel>
                                         </Grid>
                                     </DataTemplate></DataGridTemplateColumn.CellTemplate>
                                 </DataGridTemplateColumn>
-                                <DataGridTextColumn x:Name="AppColumn1" Header="" Binding="{Binding DownloadRateText}" SortMemberPath="DownloadRate" Width="76"/>
-                                <DataGridTextColumn x:Name="AppColumn2" Header="" Binding="{Binding UploadRateText}" SortMemberPath="UploadRate" Width="76"/>
-                                <DataGridTextColumn x:Name="AppColumn3" Header="" Binding="{Binding ReceivedText}" SortMemberPath="Received" Width="80"/>
-                                <DataGridTextColumn x:Name="AppColumn4" Header="" Binding="{Binding SentText}" SortMemberPath="Sent" Width="80"/>
+                                <DataGridTextColumn x:Name="AppColumn1" Header="" Binding="{Binding DownloadRateText}" SortMemberPath="DownloadRate" Width="64"/>
+                                <DataGridTextColumn x:Name="AppColumn2" Header="" Binding="{Binding UploadRateText}" SortMemberPath="UploadRate" Width="64"/>
+                                <DataGridTextColumn x:Name="AppColumn3" Header="" Binding="{Binding ReceivedText}" SortMemberPath="Received" Width="64"/>
+                                <DataGridTextColumn x:Name="AppColumn4" Header="" Binding="{Binding SentText}" SortMemberPath="Sent" Width="64"/>
+                                <DataGridTemplateColumn Width="29" CanUserSort="False">
+                                    <DataGridTemplateColumn.CellTemplate><DataTemplate>
+                                        <Button Click="QuickAppPolicy" IsEnabled="{Binding CanControl}" Content="{Binding GateGlyph}"
+                                                FontFamily="Segoe MDL2 Assets" FontSize="11" Padding="0"
+                                                ToolTip="{Binding GateLabel}" AutomationProperties.Name="{Binding GateLabel}"/>
+                                    </DataTemplate></DataGridTemplateColumn.CellTemplate>
+                                </DataGridTemplateColumn>
                             </DataGrid.Columns>
                         </DataGrid>
                         <TextBlock x:Name="EmptyApps" VerticalAlignment="Center" HorizontalAlignment="Center" Foreground="{DynamicResource Muted}" TextWrapping="Wrap" TextAlignment="Center"/>

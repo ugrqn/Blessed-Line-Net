@@ -283,7 +283,7 @@ jobs:
               if (!$curl.HasExited) { $curl.Kill() }
           }
           $id = [Guid]::NewGuid().ToString('N')
-          $pipe = [IO.Pipes.NamedPipeServerStream]::new("BlessedLine-$id",[IO.Pipes.PipeDirection]::In,1,[IO.Pipes.PipeTransmissionMode]::Byte,[IO.Pipes.PipeOptions]::Asynchronous)
+          $pipe = [IO.Pipes.NamedPipeServerStream]::new("BlessedLine-$id",[IO.Pipes.PipeDirection]::InOut,1,[IO.Pipes.PipeTransmissionMode]::Byte,[IO.Pipes.PipeOptions]::Asynchronous)
           try {
               $worker = Start-Process $exe -ArgumentList @('--traffic',$id,$PID) -PassThru
               if (!$pipe.WaitForConnectionAsync().Wait(12000)) { throw 'Helper did not connect.' }

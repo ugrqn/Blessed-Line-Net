@@ -7,7 +7,7 @@ internal sealed class TrafficMeasurement : IDisposable
     private ApplicationTraffic? _direct;
     private TrafficHelper? _helper;
     internal bool Elevated { get; } = IsAdministrator();
-    internal bool CanStart => Elevated ? _direct is null || _direct.Failed : _helper is null || _helper.Finished;
+    internal bool CanStart => Elevated ? _direct is null || _direct.Failed : _helper is null || _helper.Finished || !_helper.Capturing;
 
     internal void Start()
     {
@@ -20,12 +20,24 @@ internal sealed class TrafficMeasurement : IDisposable
         else
         {
             _helper?.Dispose();
-            _helper = new TrafficHelper();
+            _helper = new TrafficHelper(captureTraffic: true);
             _ = _helper.StartAsync();
         }
     }
 
     internal (string Status, AppTraffic[] Traffic)? Drain() => _direct?.Drain() ?? _helper?.Drain();
+
+    internal Task<PolicyResult> ApplyPolicyAsync(PolicyRequest request)
+    {
+        if (Elevated) return Task.Run(() => ApplicationPolicy.ExecuteAsync(request));
+        if (_helper is null || _helper.Finished)
+        {
+            _helper?.Dispose();
+            _helper = new TrafficHelper(captureTraffic: false);
+            _ = _helper.StartAsync();
+        }
+        return _helper.ApplyAsync(request);
+    }
 
     private static bool IsAdministrator()
     {

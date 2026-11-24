@@ -19,16 +19,10 @@ public partial class App : Application
     private QuotaNotifications? _notifications;
     private TrafficMeasurement? _traffic;
     private WifiControl? _wifi;
+    private AppPolicyController? _policies;
 
     protected override void OnStartup(StartupEventArgs e)
     {
-        if (e.Args is ["--traffic", var pipe, var owner] && Guid.TryParseExact(pipe, "N", out var id) && int.TryParse(owner, out var parent))
-        {
-            TrafficHelper.Run(id, parent);
-            Shutdown();
-            return;
-        }
-
         var startInTray = e.Args.Contains(WindowsStartup.TrayArgument);
         _instance = new Mutex(false, @"Local\BlessedLine.Desktop");
         try
@@ -73,12 +67,16 @@ public partial class App : Application
             Dispatcher.BeginInvoke(() => ShowWindow(mini: false)), null, Timeout.Infinite, false);
         _tray = new TrayMenu(() => ShowWindow(mini: false), () => ShowWindow(mini: true), RestoreWifi, ExitApplication);
         _traffic = new TrafficMeasurement();
+        _settings.FavoriteApps ??= [];
+        _settings.AppRules = new(_settings.AppRules ?? [], StringComparer.OrdinalIgnoreCase);
+        _policies = new AppPolicyController(_settings, _store, _traffic);
+        _policies.Failed += message => _tray.Notify(message);
         _wifi = new WifiControl(_settings, _store, _meter, ReportWifi);
         _notifications = new QuotaNotifications(_settings, () => _wifi.CanCut, ApplyQuotaAction);
         if (_settings.AutoMeasureApplications)
             Dispatcher.BeginInvoke(_traffic.Start);
         if (startInTray)
-            _monitor = new TrayMonitor(_settings, _store, _meter, _tray, _notifications, _wifi);
+            _monitor = new TrayMonitor(_settings, _store, _meter, _tray, _notifications, _wifi, _policies);
         else
             ShowWindow(mini: false);
     }
@@ -108,7 +106,7 @@ public partial class App : Application
 
         _monitor?.Dispose();
         _monitor = null;
-        var window = new MainWindow(_settings, _store, _meter, _tray!, _notifications!, _traffic!, _wifi!, mini, _startupError);
+        var window = new MainWindow(_settings, _store, _meter, _tray!, _notifications!, _traffic!, _wifi!, _policies!, mini, _startupError);
         MainWindow = window;
         window.Closed += (_, _) => Shutdown();
         window.Show();

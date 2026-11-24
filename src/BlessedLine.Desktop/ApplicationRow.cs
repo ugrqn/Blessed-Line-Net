@@ -9,11 +9,36 @@ public sealed class ApplicationRow : INotifyPropertyChanged
     public ApplicationRow(string? path, ImageSource fallback)
     {
         Path = path;
+        CanControl = ApplicationPolicy.IsControllable(path);
+        Name = ApplicationName.FromPath(path);
         _fallback = fallback;
     }
 
     public string? Path { get; }
-    public string Name => ApplicationName.FromPath(Path);
+    public string Name { get; }
+    public bool CanControl { get; }
+    public bool Favorite { get; private set; }
+    public bool IsBlocked { get; private set; }
+    public bool HasControls { get; private set; }
+    public bool ShowUsageColor { get; private set; }
+    public int UsageLevel => ShowUsageColor ? Math.Max(DownloadRate, UploadRate) switch
+    {
+        >= 1_000_000 => 2,
+        >= 100_000 => 1,
+        _ => 0
+    } : 0;
+    public string GateGlyph => IsBlocked ? "\uE785" : "\uE72E";
+    public string GateLabel => TextCatalog.Format(IsBlocked ? "UnblockApp" : "BlockApp");
+    public string FavoriteLabel => TextCatalog.Format(Favorite ? "UnfavoriteApp" : "FavoriteApp");
+
+    internal void Sync(bool favorite, bool colors, AppPolicyRule? rule)
+    {
+        Favorite = favorite;
+        ShowUsageColor = colors;
+        IsBlocked = rule?.IsBlocked == true;
+        HasControls = rule is not null && !rule.IsEmpty;
+        RefreshText();
+    }
     public ImageSource Icon => _icon ??= (_appId is null ? null : ApplicationIcon.Packaged(_appId))
         ?? ApplicationIcon.Read(Path) ?? _fallback;
 

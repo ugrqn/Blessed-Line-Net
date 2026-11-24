@@ -15,6 +15,9 @@ internal sealed class WindowStateData
     public WifiQuota? ArmedWifi { get; set; }
     public WifiRecovery? WifiRecovery { get; set; }
     public string Language { get; set; } = "tr";
+    public List<string> FavoriteApps { get; set; } = [];
+    public Dictionary<string, AppPolicyRule> AppRules { get; set; } = new(StringComparer.OrdinalIgnoreCase);
+    public bool ColorizeUsage { get; set; } = true;
     public bool AutoMeasureApplications { get; set; } = true;
     public bool StartWithWindows { get; set; } = true;
     public int Sound { get; set; }
