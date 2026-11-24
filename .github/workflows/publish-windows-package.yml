@@ -6,10 +6,14 @@ on:
       tag:
         description: Existing release tag (for example, v0.3.0-preview)
         required: true
-        default: v0.4.0-preview
+        default: v0.4.1-preview
       sha256:
         description: SHA-256 of the verified checksum manifest on the downloads branch
         required: true
+      include_linux:
+        description: Include a Linux archive for this version
+        type: boolean
+        default: true
 
 permissions:
   contents: write
@@ -34,6 +38,7 @@ jobs:
           GH_TOKEN: ${{ github.token }}
           RELEASE_TAG: ${{ inputs.tag }}
           PACKAGE_SHA: ${{ inputs.sha256 }}
+          INCLUDE_LINUX: ${{ inputs.include_linux }}
         run: |
           if [[ ! "$RELEASE_TAG" =~ ^v([0-9]+\.[0-9]+\.[0-9]+)(-preview)?$ ]]; then
             echo "Expected a version tag such as v0.3.0-preview"
@@ -42,7 +47,10 @@ jobs:
           version="${BASH_REMATCH[1]}"
           base="BlessedLine-$version"
           manifest="$base-SHA256SUMS.txt"
-          packages=("$base-win-x64.7z" "$base-win-x86.7z" "$base-linux.tar.gz" "$base-downloads.zip")
+          packages=("$base-win-x64.7z" "$base-win-x86.7z" "$base-downloads.zip")
+          if [[ "$INCLUDE_LINUX" == true ]]; then
+            packages+=("$base-linux.tar.gz")
+          fi
           if [[ ! "$PACKAGE_SHA" =~ ^[a-f0-9]{64}$ ]]; then
             echo "Expected a lowercase SHA-256 digest"
             exit 1

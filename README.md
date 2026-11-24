@@ -2,16 +2,16 @@
 
 BlessedLine, Windows ve Linux için internet kullanımı ve kota sayacıdır. Ana pencere seçili bağlantının hızını ve kotasını, altındaki tablo ise ağ kullanan uygulamaları gösterir.
 
-[English](docs/README.en.md) · [Sürüm notları](https://github.com/ugrqn/Blessed-Line-Net/releases/tag/v0.4.0-preview) · [11 dilli indirme kartları (ZIP)](https://github.com/ugrqn/Blessed-Line-Net/releases/download/v0.4.0-preview/BlessedLine-0.4.0-downloads.zip)
+[English](docs/README.en.md) · [Sürüm notları](https://github.com/ugrqn/Blessed-Line-Net/releases/tag/v0.4.1-preview) · [11 dilli indirme kartları (ZIP)](https://github.com/ugrqn/Blessed-Line-Net/releases/download/v0.4.1-preview/BlessedLine-0.4.1-downloads.zip)
 
 ## İndir
 
 | Windows 64 bit | Windows 32 bit | Linux |
 | :--- | :--- | :--- |
-| **[İndir · x64 .7z](https://github.com/ugrqn/Blessed-Line-Net/releases/download/v0.4.0-preview/BlessedLine-0.4.0-win-x64.7z)** | **[İndir · x86 .7z](https://github.com/ugrqn/Blessed-Line-Net/releases/download/v0.4.0-preview/BlessedLine-0.4.0-win-x86.7z)** | **[İndir · .tar.gz](https://github.com/ugrqn/Blessed-Line-Net/releases/download/v0.4.0-preview/BlessedLine-0.4.0-linux.tar.gz)** |
+| **[İndir · x64 .7z](https://github.com/ugrqn/Blessed-Line-Net/releases/download/v0.4.1-preview/BlessedLine-0.4.1-win-x64.7z)** | **[İndir · x86 .7z](https://github.com/ugrqn/Blessed-Line-Net/releases/download/v0.4.1-preview/BlessedLine-0.4.1-win-x86.7z)** | **[İndir · .tar.gz](https://github.com/ugrqn/Blessed-Line-Net/releases/download/v0.4.0-preview/BlessedLine-0.4.0-linux.tar.gz)** |
 | Windows 11 / 64 bit Windows 10 | 32 bit Windows 10 | Debian ve Ubuntu önizlemesi |
 
-Windows’ta eski sürüm açıksa bildirim alanındaki simgeden **Çıkış**’ı seç. Yeni arşivi ayıkla ve `BlessedLine.exe` dosyasını aç. Linux paketinde Python 3 ve Tk gerekir. [Linux kullanım bilgileri](src/BlessedLine.Linux/README.md)
+Windows’ta eski sürüm açıksa bildirim alanındaki simgeden **Çıkış**’ı seç. Yeni arşivi ayıkla ve `BlessedLine.exe` dosyasını aç. İlk açılışta **Windows ile başlat** seçeneği etkindir. Oturum açıldığında sayaç tepside çalışır. Ana pencereyi tepsi simgesinden açabilir, otomatik başlatmayı **Ayarlar** bölümünden kapatabilirsin. Linux paketinde Python 3 ve Tk gerekir. [Linux kullanım bilgileri](src/BlessedLine.Linux/README.md)
 
 ## Uygulamalar ve sayaçlar
 
