@@ -313,7 +313,7 @@ jobs:
           $profilePath = Join-Path $env:LOCALAPPDATA 'BlessedLine/state.json'
           $country = Import-Csv src/BlessedLine.Desktop/Languages.tsv -Delimiter "`t" | Where-Object key -eq Settings
           foreach ($language in @('tr','en','zh','hi','es','ar','fr','bn','pt','ru','ur')) {
-              @{ Language = $language } | ConvertTo-Json | Set-Content $profilePath
+              @{ Language = $language; AutoMeasureApplications = $false } | ConvertTo-Json | Set-Content $profilePath
               $app = Start-Process -FilePath $env:BLESSED_EXE -PassThru
               try {
                   for ($i = 0; $i -lt 30; $i++) {

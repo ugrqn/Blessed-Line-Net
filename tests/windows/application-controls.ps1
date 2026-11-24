@@ -56,8 +56,9 @@ function Wait-Check([scriptblock] $Predicate, [string] $Name, [int] $Count = 40)
         Start-Sleep -Milliseconds 400
     }
     $feedback = if ($script:window) { (ById $script:window 'Feedback').Current.Name }
+    $measurement = if ($script:window) { (ById $script:window 'DetailStatus').Current.Name }
     $detailStatus = (ById $ui::RootElement 'ActionStatus').Current.Name
-    throw "Timed out: $Name. Feedback: $feedback. Action: $detailStatus"
+    throw "Timed out: $Name. Feedback: $feedback. Action: $detailStatus. Measurement: $measurement"
 }
 
 function Fixture-Request {
