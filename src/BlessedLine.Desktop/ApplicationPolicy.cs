@@ -165,11 +165,11 @@ internal static class ApplicationPolicy
             Marshal.ReleaseComObject(rule);
             return true;
         }
-        catch (COMException ex) when (IsMissingRule(ex)) { return false; }
-        catch (TargetInvocationException ex) when (ex.InnerException is COMException cause && IsMissingRule(cause)) { return false; }
+        catch (Exception ex) when (IsMissingRule(ex)) { return false; }
     }
 
-    private static bool IsMissingRule(COMException error) => error.HResult == unchecked((int)0x80070002);
+    private static bool IsMissingRule(Exception error) =>
+        (error is TargetInvocationException { InnerException: { } inner } ? inner : error).HResult == unchecked((int)0x80070002);
 
     private static void RemoveRule(object rules, string name)
     {
