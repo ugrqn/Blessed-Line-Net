@@ -64,13 +64,12 @@ jobs:
               $settings = $window.FindFirst([System.Windows.Automation.TreeScope]::Descendants, [System.Windows.Automation.PropertyCondition]::new($e::AutomationIdProperty, 'SettingsButton'))
               $settings.GetCurrentPattern($invoke).Invoke()
               Start-Sleep -Milliseconds 500
-              $theme = $e::RootElement.FindFirst([System.Windows.Automation.TreeScope]::Descendants, [System.Windows.Automation.PropertyCondition]::new($e::AutomationIdProperty, 'ThemeList'))
-              $theme.GetCurrentPattern([System.Windows.Automation.ExpandCollapsePattern]::Pattern).Expand()
               $aero = $e::RootElement.FindFirst([System.Windows.Automation.TreeScope]::Descendants, [System.Windows.Automation.PropertyCondition]::new($e::AutomationIdProperty,'AeroThemeOption'))
               $aero.GetCurrentPattern([System.Windows.Automation.SelectionItemPattern]::Pattern).Select()
               Start-Sleep -Milliseconds 600
               $saved = Get-Content (Join-Path $env:LOCALAPPDATA 'BlessedLine/state.json') -Raw | ConvertFrom-Json
               if ($saved.Theme -ne 'Win7') { throw 'Theme change did not persist.' }
+              if ($p.HasExited) { throw 'The theme switch closed the app.' }
               Write-Host 'Aero was selected and saved.'
 
           } finally {

@@ -1,18 +1,24 @@
 # BlessedLine
 
-BlessedLine, Windows 11 x64 için Türkçe ağ kullanımı ve kota takip uygulamasıdır. Kare ana panel, sağ üste yerleşen mini panel, XP Luna esintili görünüm ve projeye ait ikonlar içerir.
+BlessedLine, Windows 11 x64 için Türkçe internet kullanımı ve kota sayacıdır. Ana pencere seçili bağlantının hızını ve kotasını, altındaki tablo ise ağ kullanan uygulamaları gösterir.
 
-## Windows’ta çalıştır
+## Windows’ta açma
 
-[0.2.0 önizlemesindeki taşınabilir paketi](https://github.com/ugrqn/Blessed-Line-Net/releases/tag/v0.2.0-preview) indir. Windows 11’de arşivi ayıkla ve çıkan `BlessedLine` klasöründeki `BlessedLine.exe` dosyasını aç. Paket .NET çalışma zamanını içerir.
+[0.3.0 taşınabilir paketi](https://github.com/ugrqn/Blessed-Line-Net/blob/downloads/BlessedLine-0.3.0-win-x64.7z) bağlantısını aç ve GitHub’daki indirme düğmesine bas. Önceki sürüm açıksa görev çubuğundaki BlessedLine simgesine sağ tıklayıp **Çıkış**’ı seç. İndirdiğin arşivin tamamını yeni bir klasöre ayıkla. İçindeki `BlessedLine.exe` dosyasına çift tıkla. Paket .NET çalışma zamanını içerir.
 
-- **Bağlantı** alanında Wi-Fi, kablolu ağ ve varsa VPN gibi anlaşılır seçeneklerden birini seç.
-- **Toplam harcanan** seçili bağlantıyı esas alır. Bir MB limiti girip **Uygula** deyince Wi-Fi göstergesi kullanımla birlikte kırmızı duvara yaklaşır. %90’da ve limitte sesli uyarı gelir.
-- **Uygulamalar → Ölçümü aç** yönetici erişimiyle Windows trafik ölçümünü başlatır. Satırlarda kısa ad, ikon, anlık indirme ve yükleme hızları, oturum toplamı bulunur. Adın üstünde ayrı indirme ve yükleme toplamlarını görebilirsin. Bu tablo tüm bağlantılardaki atfedilebilir TCP/UDP trafiğini gösterir.
-- Başlıktaki **Mini panel** düğmesi küçük görünümü sağ üste taşır. **Ayarlar** üzerinden detayların ana ve mini görünümde açık kalmasını ayrı seçebilir, üç sesi dinleyebilirsin.
-- **Limitte bağlantıyı kes** varsayılan olarak kapalıdır. Yönetici erişimiyle açıkça etkinleştirildiğinde Windows’un geçici filtresi seçili bağlantının internet ve yerel ağ trafiğini keser. **Bağlantıyı geri aç** filtreyi kaldırır. Ayar uygulama yeniden açılınca tekrar onay ister.
+## Uygulamalar ve sayaçlar
 
-Sayaçlar `%LOCALAPPDATA%\BlessedLine\state.json` dosyasında saklanır. İlk açılışta varsa RetroNet önizlemesinden kalan sayaçlar içe alınır. Bu sürümde ölçüm masaüstü uygulaması açıkken çalışır.
+- **Uygulamalar** açıkken etkin TCP bağlantısı olan programlar otomatik listelenir. Bir programı görmek için o programda bir sayfa aç veya indirme başlat. Windows’un verdiği dosya ya da uygulama paketi simgesi, kısa adın yanında görünür. Simge okunamıyorsa Windows’un genel uygulama simgesi kullanılır.
+- **Hızları ölç…** düğmesine basıp Windows’un yönetici iznini onayla. Ana pencere açık kalır. Tabloda her uygulamanın indirme ve yükleme hızını ve ölçüm başladığından beri iki yöndeki toplamını görebilirsin. Çizgi (—) henüz ölçüm alınmadığını gösterir. Yönetici olarak başlatılan oturumlarda ölçüm kendiliğinden açılır.
+- Üstteki kota **seçili bağlantıya**, uygulama tablosu Windows’un süreçlere bağlayabildiği **tüm bağlantılardaki TCP ve UDP trafiğine** dayanır. Kaynağı belirlenemeyen trafik “Atfedilemeyen” adıyla gösterilir.
+- **Kota ekle…** veya **Kotayı düzenle…** içinden sayacı seç, limiti MB olarak gir ve **Uygula**’ya bas. Çubuk kullanımla dolar ve kota dolunca kırmızı olur. %90’da ve limitte bildirim verilir. **Limitte bağlantıyı kes** seçeneği yönetici izniyle çalışır. Filtre etkinse **Bağlantıyı geri aç** ile kaldırabilirsin.
+- **Ayarlar…** içinde **XP Klasik** veya **Windows 7 Aero** görünümünü seçebilirsin. Pencere çerçevesi, yazı tipi ve denetimler temayla birlikte değişir. Ana pencere ve küçük çubuk için uygulama listesini ayrı ayrı açabilirsin. Üç uyarı sesini aynı bölümde dinleyebilirsin.
+
+## Küçük çubuk ve bildirim alanı
+
+**–** pencereyi ekranın sağ üstünde küçük çubuğa dönüştürür. Kalan kotayı ve iki yöndeki hızı burada görebilirsin. **□** ana pencereye döner. **×** pencereyi bildirim alanına gizler ve sayaç çalışmaya devam eder. Saatin yanındaki **∧** altında BlessedLine simgesine çift tıklayarak geri açabilirsin. Tamamen kapatmak için simgeye sağ tıklayıp **Çıkış**’ı seç.
+
+Sayaç ve ayarların konumu `%LOCALAPPDATA%\BlessedLine\state.json` dosyasıdır. Uygulama satırlarındaki toplamlar o ölçüm oturumuna aittir.
 
 ## Yerel geliştirme
 

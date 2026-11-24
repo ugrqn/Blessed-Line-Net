@@ -89,7 +89,7 @@ public partial class MainWindow : Window
         PinMiniDetails.IsChecked = _settings.MiniDetails;
         Sounds.SelectedIndex = Math.Clamp(_settings.Sound, 0, SoundNames.Length - 1);
 
-        ThemeList.SelectedIndex = _settings.Theme == "Win7" ? 1 : 0;
+        (_settings.Theme == "Win7" ? AeroThemeOption : XpThemeOption).IsChecked = true;
         SetTheme();
         _details = _settings.MainDetails || Environment.GetCommandLineArgs().Contains("--handoff");
         _tray = new TrayMenu(() => ShowPanel(false), () => ShowPanel(true), () => RestoreConnection(this, new()), Quit);
@@ -393,7 +393,7 @@ public partial class MainWindow : Window
         var counter = Current;
         if (_counters.Count == 1)
         {
-            SettingsPopup.IsOpen = false;
+            QuotaPopup.IsOpen = false;
             Feedback.Text = "Son sayacı silmek için önce yeni bir sayaç oluşturun.";
             return;
         }
@@ -661,10 +661,10 @@ public partial class MainWindow : Window
 
     private void EditQuota(object sender, RoutedEventArgs e) => QuotaPopup.IsOpen = !QuotaPopup.IsOpen;
 
-    private void ThemeChanged(object sender, SelectionChangedEventArgs e)
+    private void ThemeChanged(object sender, RoutedEventArgs e)
     {
         if (!_ready) return;
-        _settings.Theme = ThemeList.SelectedIndex == 1 ? "Win7" : "XP";
+        _settings.Theme = sender == AeroThemeOption ? "Win7" : "XP";
         SetTheme();
         UpdateQuota();
         Save();
