@@ -1,5 +1,22 @@
 # Doğrulama kaydı
 
+## BlessedLine 0.5.0
+
+Windows paket testleri Win7 başlığının sol üst pikselini, otomatik ölçümle canlı süreç trafiğini, Windows başlangıç kaydını ve standart kullanıcı yardımcı kanalını kontrol etti. Tepsi modunda erken uyarı ve kota doldu pencerelerinin üstte olduğu doğrulandı. +200 MB ile seçili kota arttı, devam et seçimi pencereyi kapattı ve 150 MB uyarı payı formdan kaydedildi. 23 çekirdek testi geçti. [Windows paket testi](https://github.com/ugrqn/Blessed-Line-Net/actions/runs/45393548644)
+
+### Tepsi başlangıcında RAM
+
+Windows Server 2025 yönetici oturumunda üç örneğin ortancası ölçüldü. Otomatik ölçüm açıkken bu oturum tek süreçte ETW kullanır. Windows standart kullanıcı için ayrı yardımcı süreç açarsa toplam bellek kullanımı farklı olabilir.
+
+| Paket | 0.4.1 ölçüm kapalı | 0.5.0 ölçüm kapalı | 0.5.0 otomatik ölçüm |
+|---|---:|---:|---:|
+| x64 çalışma kümesi | 63,8 MiB | 63,5 MiB | 71,3 MiB |
+| x86 çalışma kümesi | 54,9 MiB | 55,1 MiB | 66,3 MiB |
+| x64 özel bayt | 15,2 MiB | 15,3 MiB | 19,8 MiB |
+| x86 özel bayt | 13,9 MiB | 13,7 MiB | 22,4 MiB |
+
+Wi-Fi geri dönüşü, radyoyu açtıktan sonra yakalanabilen önceki Windows ağına bağlanmayı dener. Windows test çalıştırıcılarında fiziksel Wi-Fi bağdaştırıcısı ve kayıtlı ağ olmadığı için gerçek ağdan ayrılma ve yeniden bağlanma adımı donanım üzerinde doğrulanamadı. [Donanım kontrolü](windows-kontrol.md) · [Windows WLAN bağlantı API’si](https://learn.microsoft.com/windows/win32/api/wlanapi/ns-wlanapi-wlan_connection_parameters)
+
 ## BlessedLine 0.4.1
 
 Yüklenen ICO’nun orijinal 256 piksel karesi x64 ve x86 EXE kaynaklarında bayt düzeyinde doğrulandı. Simge dosyası ayrıca küçük görev çubuğu ve bildirim alanı boyutları için 16–64 piksel kareler içerir. Windows testi mini penceredeki simgeyi, başlangıç kayıt defteri değerini, açılışı kapatıp tekrar açmayı, penceresiz ağ ölçümünü ve ikinci EXE çalıştırmasının mevcut pencereyi açmasını doğruladı. [Windows paket testi](https://github.com/ugrqn/Blessed-Line-Net/actions/runs/45386216755)
