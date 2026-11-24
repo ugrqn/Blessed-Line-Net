@@ -1,7 +1,6 @@
 using System.Collections.ObjectModel;
 using System.ComponentModel;
 using System.Diagnostics;
-using System.Globalization;
 using System.Media;
 using System.Net.NetworkInformation;
 using System.Security.Principal;
@@ -27,7 +26,7 @@ public partial class MainWindow : Window
     private TrayMenu? _tray;
     private TrafficHelper? _helper;
     private bool _quit, _discoveryPending, _sessionEnding;
-    private string _measureStatus = "Bağlantılar listeleniyor · hız ölçümü kapalı";
+    private string _measureStatus = "ConnectionsOnly";
     private string _discoveryStatus = "";
     private readonly HashSet<string> _connected = new(StringComparer.OrdinalIgnoreCase);
     private static readonly SolidColorBrush AvailableBrush = new(Color.FromRgb(62, 146, 64));
@@ -72,13 +71,16 @@ public partial class MainWindow : Window
         try { _settings = _store.Load(); }
         catch (Exception ex) when (ex is System.IO.IOException or System.Text.Json.JsonException or UnauthorizedAccessException)
         {
-            Feedback.Text = "Önceki sayaç verileri okunamadı.";
+            Feedback.Text = T("ReadStateError");
             Debug.WriteLine(ex);
         }
+        LanguageList.ItemsSource = TextCatalog.Languages;
+        LanguageList.SelectedValue = TextCatalog.GetLanguage(_settings.Language).Code;
+        ApplyLanguage();
         foreach (var counter in _settings.SavedCounters ?? [])
             _counters.Add(counter);
         if (_counters.Count == 0)
-            _counters.Add(_settings.Counter ?? new Counter { Name = "Toplam sayaç" });
+            _counters.Add(_settings.Counter ?? new Counter { Name = T("TotalCounter") });
         Counters.SelectedItem = _counters.FirstOrDefault(item => item.Id == _settings.Counter?.Id) ?? _counters[0];
         PinDetails.IsChecked = _settings.MainDetails;
         PinMiniDetails.IsChecked = _settings.MiniDetails;
@@ -98,7 +100,7 @@ public partial class MainWindow : Window
         _timer.Start();
         _ = DiscoverAsync();
         if (_isAdmin && Environment.GetCommandLineArgs().Contains("--arm-wifi"))
-            BlockCheck.IsChecked = true;
+            Dispatcher.BeginInvoke(() => BlockCheck.IsChecked = true);
         if (_isAdmin && Environment.GetCommandLineArgs().Contains("--restore-wifi"))
             RestoreConnection(this, new());
     }
@@ -132,12 +134,12 @@ public partial class MainWindow : Window
                 _adapter = selected;
 
             if (selected is null)
-                NetworkStatus.Text = _settings.WifiRecovery is null ? "Bağlı ağ bulunamadı" : "Wi-Fi kota nedeniyle kapalı";
+                NetworkStatus.Text = _settings.WifiRecovery is null ? T("NoNetwork") : T("WifiOff");
         }
         catch (NetworkInformationException ex)
         {
             _previous = null;
-            NetworkStatus.Text = "Bağlantı bilgisi alınamadı";
+            NetworkStatus.Text = T("ReadNetworkError");
             Debug.WriteLine(ex);
         }
     }
@@ -156,7 +158,7 @@ public partial class MainWindow : Window
         _adapter = adapter;
         _previous = null;
         _settings.AdapterId = adapter?.Id ?? _settings.AdapterId;
-        NetworkStatus.Text = adapter is null ? "Bağlı ağ bulunamadı" : $"{adapter.Label} · ölçüm hazırlanıyor";
+        NetworkStatus.Text = adapter is null ? T("NoNetwork") : T("AdapterPreparing", adapter.Label);
         DownloadRate.Text = UploadRate.Text = "—";
     }
 
@@ -195,13 +197,13 @@ public partial class MainWindow : Window
             if (delta is not { } sample)
             {
                 DownloadRate.Text = UploadRate.Text = "—";
-                NetworkStatus.Text = $"{adapter.Label} · ölçüm hazırlanıyor";
+                NetworkStatus.Text = T("AdapterPreparing", adapter.Label);
                 return;
             }
 
-            NetworkStatus.Text = $"{adapter.Label} · ölçülüyor";
-            DownloadRate.Text = Units.Format((long)(sample.Received / sample.Elapsed.TotalSeconds)) + "/sn";
-            UploadRate.Text = Units.Format((long)(sample.Sent / sample.Elapsed.TotalSeconds)) + "/sn";
+            NetworkStatus.Text = T("AdapterMeasuring", adapter.Label);
+            DownloadRate.Text = TextCatalog.Bytes((long)(sample.Received / sample.Elapsed.TotalSeconds)) + T("PerSecond");
+            UploadRate.Text = TextCatalog.Bytes((long)(sample.Sent / sample.Elapsed.TotalSeconds)) + T("PerSecond");
 
             foreach (var counter in _counters)
             {
@@ -210,8 +212,8 @@ public partial class MainWindow : Window
                     continue;
 
                 Feedback.Text = notification == CounterEvent.Limit
-                    ? $"{counter.Name} · limit doldu"
-                    : $"{counter.Name} · limite yaklaşıldı";
+                    ? T("CounterAtLimit", counter.Name)
+                    : T("CounterNearLimit", counter.Name);
                 PlaySound();
                 _tray?.Notify(Feedback.Text);
                 Save();
@@ -224,7 +226,7 @@ public partial class MainWindow : Window
         catch (Exception ex) when (ex is NetworkInformationException or OverflowException)
         {
             _previous = null;
-            NetworkStatus.Text = "Ölçüm kesildi · bağlantı kontrol ediliyor";
+            NetworkStatus.Text = T("MeasurementInterrupted");
             DownloadRate.Text = UploadRate.Text = "—";
             Debug.WriteLine(ex);
         }
@@ -282,7 +284,7 @@ public partial class MainWindow : Window
         }
         catch (Exception ex) when (ex is Win32Exception or UnauthorizedAccessException or System.Runtime.InteropServices.COMException)
         {
-            _discoveryStatus = "Bağlantı listesi okunamadı";
+            _discoveryStatus = "ReadConnectionsError";
             Debug.WriteLine(ex);
         }
         finally
@@ -303,7 +305,7 @@ public partial class MainWindow : Window
     private void SetCounterFields()
     {
         LimitInput.Text = Current.LimitBytes is long limit
-            ? (limit / 1_000_000m).ToString("0.######", CultureInfo.GetCultureInfo("tr-TR"))
+            ? (limit / 1_000_000m).ToString("0.######", TextCatalog.Culture)
             : "";
         UpdateQuota();
     }
@@ -313,23 +315,23 @@ public partial class MainWindow : Window
         var counter = Current;
         _quotaFraction = QuotaProgress.Fraction(counter.UsedBytes, counter.LimitBytes);
         QuotaText.Text = counter.LimitBytes is long limit
-            ? $"Toplam harcanan · {Units.Format(counter.UsedBytes)} / {Units.Format(limit)}"
-            : $"Toplam harcanan · {Units.Format(counter.UsedBytes)}";
-        QuotaPercent.Text = counter.LimitBytes is null ? "" : $"%{Math.Floor(_quotaFraction * 100):0}";
-        QuotaHint.Text = _settings.WifiRecovery is not null && !_mini ? "Wi-Fi kota nedeniyle kapalı"
-            : counter.State == CounterState.Paused ? "Sayaç duraklatıldı"
-            : counter.LimitBytes is null ? "Limit belirlenmedi"
-            : counter.UsedBytes >= counter.LimitBytes ? "Limit doldu"
-            : $"{Units.Format(counter.LimitBytes.Value - counter.UsedBytes)} kaldı";
+            ? T("TotalUsage") + $" · {TextCatalog.Bytes(counter.UsedBytes)} / {TextCatalog.Bytes(limit)}"
+            : T("TotalUsage") + $" · {TextCatalog.Bytes(counter.UsedBytes)}";
+        QuotaPercent.Text = counter.LimitBytes is null ? "" : _quotaFraction.ToString("P0", TextCatalog.Culture);
+        QuotaHint.Text = _settings.WifiRecovery is not null && !_mini ? T("WifiOff")
+            : counter.State == CounterState.Paused ? T("CounterPaused")
+            : counter.LimitBytes is null ? T("NoLimit")
+            : counter.UsedBytes >= counter.LimitBytes ? T("LimitReached")
+            : T("QuotaLeft", TextCatalog.Bytes(counter.LimitBytes.Value - counter.UsedBytes));
         if (_mini && counter.LimitBytes is long total)
-            QuotaHint.Text = $"{Units.Format(total)} kotadan {Units.Format(Math.Max(0, total - counter.UsedBytes))} kaldı";
+            QuotaHint.Text = T("QuotaLeftOf", TextCatalog.Bytes(total), TextCatalog.Bytes(Math.Max(0, total - counter.UsedBytes)));
         if (!_mini && counter.Direction != TrafficDirection.Both)
-            QuotaHint.Text += counter.Direction == TrafficDirection.Download ? " · yalnız indirme" : " · yalnız yükleme";
-        PauseButton.Content = counter.State == CounterState.Paused ? "Sürdür" : "Duraklat";
+            QuotaHint.Text += counter.Direction == TrafficDirection.Download ? T("DownloadSuffix") : T("UploadSuffix");
+        PauseButton.Content = counter.State == CounterState.Paused ? T("Resume") : T("Pause");
         ExtendButton.IsEnabled = counter.LimitBytes.HasValue;
         TrackFill.Background = _quotaFraction >= 1 ? FullBrush : AvailableBrush;
         QuotaPercent.Foreground = _quotaFraction >= 1 ? FullBrush : (Brush)FindResource("Accent");
-        EditQuotaButton.Content = counter.LimitBytes.HasValue ? "Kotayı düzenle…" : "Kota ekle…";
+        EditQuotaButton.Content = counter.LimitBytes.HasValue ? T("EditQuotaEllipsis") : "Kota ekle…";
         RestoreButton.Visibility = _settings.WifiRecovery is not null ? Visibility.Visible : Visibility.Collapsed;
         Adapters.IsEnabled = _settings.WifiRecovery is null;
         UpdateMarker();
@@ -344,22 +346,22 @@ public partial class MainWindow : Window
 
     private void NewCounter(object sender, RoutedEventArgs e)
     {
-        var name = new TextBox { Text = $"Sayaç {_counters.Count + 1}", MaxLength = 40, Margin = new Thickness(0, 7, 0, 9) };
+        var name = new TextBox { Text = T("CounterNumber", _counters.Count + 1), MaxLength = 40, Margin = new Thickness(0, 7, 0, 9) };
         var direction = new ComboBox { Margin = new Thickness(0, 4, 0, 9) };
-        direction.ItemsSource = new[] { "Toplam trafik", "Yalnız indirme", "Yalnız yükleme" };
+        direction.ItemsSource = new[] { T("TotalTraffic"), T("DownloadOnly"), T("UploadOnly") };
         direction.SelectedIndex = 0;
-        var add = new Button { Content = "Başlat", IsDefault = true };
+        var add = new Button { Content = T("Start"), IsDefault = true };
         var panel = new StackPanel { Margin = new Thickness(12) };
-        panel.Children.Add(new TextBlock { Text = "Sayaç adı" });
+        panel.Children.Add(new TextBlock { Text = T("CounterName") });
         panel.Children.Add(name);
-        panel.Children.Add(new TextBlock { Text = "Ölçülecek trafik" });
+        panel.Children.Add(new TextBlock { Text = T("TrafficToMeasure") });
         panel.Children.Add(direction);
         panel.Children.Add(add);
         var dialog = new Window
         {
-            Owner = this, Title = "Yeni sayaç", Content = panel, Width = 280, SizeToContent = SizeToContent.Height,
+            Owner = this, Title = T("NewCounter"), Content = panel, Width = 280, SizeToContent = SizeToContent.Height,
             ResizeMode = ResizeMode.NoResize, WindowStartupLocation = WindowStartupLocation.CenterOwner,
-            FontFamily = FontFamily, Background = Background
+            FontFamily = FontFamily, Background = Background, FlowDirection = FlowDirection, Language = Language
         };
         add.Click += (_, _) => dialog.DialogResult = true;
         dialog.Loaded += (_, _) => { name.SelectAll(); name.Focus(); };
@@ -367,7 +369,7 @@ public partial class MainWindow : Window
 
         var counter = new Counter
         {
-            Name = string.IsNullOrWhiteSpace(name.Text) ? "Yeni sayaç" : name.Text.Trim(),
+            Name = string.IsNullOrWhiteSpace(name.Text) ? T("NewCounter") : name.Text.Trim(),
             Direction = direction.SelectedIndex switch
             {
                 1 => TrafficDirection.Download,
@@ -385,11 +387,11 @@ public partial class MainWindow : Window
         if (_counters.Count == 1)
         {
             QuotaPopup.IsOpen = false;
-            Feedback.Text = "Son sayacı silmek için önce yeni bir sayaç oluşturun.";
+            Feedback.Text = T("LastCounter");
             return;
         }
         QuotaPopup.IsOpen = false;
-        if (MessageBox.Show(this, $"{counter.Name} silinsin mi?", "BlessedLine", MessageBoxButton.YesNo, MessageBoxImage.Question) != MessageBoxResult.Yes ||
+        if (MessageBox.Show(this, T("DeleteCounter", counter.Name), "BlessedLine", MessageBoxButton.YesNo, MessageBoxImage.Question) != MessageBoxResult.Yes ||
             (_settings.WifiRecovery?.Counter == counter.Id && !RestoreWifi())) return;
         Counters.SelectedItem = _counters.First(item => item != counter);
         _counters.Remove(counter);
@@ -405,7 +407,7 @@ public partial class MainWindow : Window
 
     private void ResetCounter(object sender, RoutedEventArgs e)
     {
-        if (MessageBox.Show(this, $"{Current.Name} sıfırlansın mı?", "BlessedLine", MessageBoxButton.YesNo, MessageBoxImage.Question) != MessageBoxResult.Yes ||
+        if (MessageBox.Show(this, T("ResetCounter", Current.Name), "BlessedLine", MessageBoxButton.YesNo, MessageBoxImage.Question) != MessageBoxResult.Yes ||
             (_settings.WifiRecovery?.Counter == Current.Id && !RestoreWifi())) return;
         ClearArming();
         Current.Reset();
@@ -417,7 +419,7 @@ public partial class MainWindow : Window
     {
         try
         {
-            long? limit = string.IsNullOrWhiteSpace(LimitInput.Text) ? null : Units.ParseMegabytes(LimitInput.Text);
+            long? limit = string.IsNullOrWhiteSpace(LimitInput.Text) ? null : Units.ParseMegabytes(LimitInput.Text, TextCatalog.Culture);
             if (_settings.WifiRecovery?.Counter == Current.Id &&
                 (limit is null || Current.UsedBytes < limit) && !RestoreWifi()) return;
             if (limit is null) ClearArming();
@@ -427,13 +429,13 @@ public partial class MainWindow : Window
             Current.WarningDelivered = false;
             UpdateQuota();
             Save();
-            Feedback.Text = limit.HasValue ? "Limit güncellendi · %90’da uyarı" : "Limit kaldırıldı";
+            Feedback.Text = limit.HasValue ? T("LimitUpdated") : T("LimitRemoved");
             CheckWifiQuota();
             UpdateQuota();
         }
         catch (Exception ex) when (ex is FormatException or OverflowException)
         {
-            Feedback.Text = "Geçerli bir MB limiti girin. Ondalık ayırıcı virgüldür.";
+            Feedback.Text = T("InvalidLimit");
         }
     }
 
@@ -448,7 +450,7 @@ public partial class MainWindow : Window
             SetCounterFields();
             Save();
         }
-        catch (OverflowException) { Feedback.Text = "Limit daha fazla artırılamıyor."; }
+        catch (OverflowException) { Feedback.Text = T("LimitOverflow"); }
     }
 
     private void ArmBlock(object sender, RoutedEventArgs e)
@@ -460,7 +462,7 @@ public partial class MainWindow : Window
             !Guid.TryParse(_adapter.Id, out var adapter))
         {
             ClearArming();
-            Feedback.Text = "Otomatik kapatma için Wi-Fi bağlantısını seçip kota ekleyin.";
+            Feedback.Text = T("NeedWifiQuota");
             return;
         }
 
@@ -472,7 +474,7 @@ public partial class MainWindow : Window
         }
 
         QuotaPopup.IsOpen = false;
-        var answer = MessageBox.Show(this, "Kota dolduğunda seçili Wi-Fi radyosu kapanır. Wi-Fi’yi geri aç butonuyla yeniden açabilirsiniz.",
+        var answer = MessageBox.Show(this, T("ConfirmWifiOff"),
             "BlessedLine · Wi-Fi", MessageBoxButton.YesNo, MessageBoxImage.Warning);
         if (answer != MessageBoxResult.Yes || Current.Id != counter.Id ||
             !Guid.TryParse(_adapter?.Id, out var selected) || selected != adapter)
@@ -482,7 +484,7 @@ public partial class MainWindow : Window
         }
 
         _wifiQuota = new(counter.Id, adapter);
-        Feedback.Text = "Kota dolunca Wi-Fi otomatik kapanacak.";
+        Feedback.Text = T("WifiArmed");
         CheckWifiQuota();
         UpdateQuota();
     }
@@ -515,13 +517,13 @@ public partial class MainWindow : Window
             }
             radio.Set(entry, enabled: false);
             DownloadRate.Text = UploadRate.Text = "—";
-            NetworkStatus.Text = Feedback.Text = "Wi-Fi kota nedeniyle kapalı";
+            NetworkStatus.Text = Feedback.Text = T("WifiOff");
             _tray?.Notify(Feedback.Text);
         }
         catch (Exception ex) when (ex is Win32Exception or InvalidOperationException)
         {
             RestoreWifi();
-            Feedback.Text = $"Wi-Fi kapatılamadı. {ex.Message}";
+            Feedback.Text = T("WifiOffError", ex.Message);
             _tray?.Notify(Feedback.Text);
         }
     }
@@ -540,7 +542,7 @@ public partial class MainWindow : Window
         }
         catch (Win32Exception ex)
         {
-            Feedback.Text = $"Wi-Fi açılamadı. {ex.Message}";
+            Feedback.Text = T("WifiOnError", ex.Message);
             return false;
         }
     }
@@ -554,7 +556,7 @@ public partial class MainWindow : Window
             return;
         }
         if (!RestoreWifi()) return;
-        Feedback.Text = "Wi-Fi yeniden açıldı.";
+        Feedback.Text = T("WifiRestored");
         RefreshAdapters();
         UpdateQuota();
     }
@@ -579,7 +581,7 @@ public partial class MainWindow : Window
 
     private void OfferElevation(string action)
     {
-        if (MessageBox.Show(this, "Wi-Fi radyosunu yönetmek için BlessedLine’ı yönetici olarak yeniden açın.",
+        if (MessageBox.Show(this, T("ElevateWifi"),
             "BlessedLine", MessageBoxButton.OKCancel, MessageBoxImage.Information) != MessageBoxResult.OK) return;
         Save();
         try
@@ -590,7 +592,7 @@ public partial class MainWindow : Window
         }
         catch (Exception ex) when (ex is Win32Exception or InvalidOperationException)
         {
-            Feedback.Text = "Yönetici olarak açma iptal edildi veya Windows tarafından reddedildi.";
+            Feedback.Text = T("ElevationDenied");
         }
     }
 
@@ -611,9 +613,9 @@ public partial class MainWindow : Window
     {
         var canStart = _isAdmin ? _applicationTraffic?.Failed == true : _helper is null or { Finished: true };
         AuthorizeButton.Visibility = _details && canStart ? Visibility.Visible : Visibility.Collapsed;
-        DetailStatus.Text = _details ? (_discoveryStatus.Length > 0 ? _discoveryStatus : _measureStatus) : "";
+        DetailStatus.Text = _details ? TextCatalog.Status(_discoveryStatus.Length > 0 ? _discoveryStatus : _measureStatus) : "";
         EmptyApps.Visibility = _details && _rows.Count == 0 ? Visibility.Visible : Visibility.Collapsed;
-        EmptyApps.Text = "Etkin ağ bağlantısı bekleniyor…";
+        EmptyApps.Text = T("AwaitingConnections");
     }
 
     internal void RestoreMainPanel() => ShowPanel(false);
@@ -659,9 +661,9 @@ public partial class MainWindow : Window
         Applications.Visibility = _details ? Visibility.Visible : Visibility.Collapsed;
         QuotaText.Visibility = _mini ? Visibility.Collapsed : Visibility.Visible;
         QuotaPercent.Visibility = _mini ? Visibility.Collapsed : Visibility.Visible;
-        DetailsLabel.Text = _details ? "Detayı gizle" : "Detayı göster";
+        DetailsLabel.Text = _details ? T("HideDetails") : T("ShowDetails");
         MiniButton.Content = _mini ? "□" : "–";
-        MiniButton.ToolTip = _mini ? "Ana pencereyi aç" : "Küçük çubuğa indir";
+        MiniButton.ToolTip = _mini ? T("OpenMain") : T("MinimizeToMini");
         MiniQuotaButton.Visibility = _mini ? Visibility.Visible : Visibility.Collapsed;
         UpdateQuota();
         if (_mini)
@@ -676,6 +678,40 @@ public partial class MainWindow : Window
         QuotaPopup.PlacementTarget = (UIElement)sender;
         QuotaPopup.IsOpen = !QuotaPopup.IsOpen;
     }
+
+    private void LanguageChanged(object sender, SelectionChangedEventArgs e)
+    {
+        if (!_ready || LanguageList.SelectedValue is not string code) return;
+        _settings.Language = code;
+        ApplyLanguage();
+        SetCounterFields();
+        _tray?.Localize();
+        foreach (var row in _rows) row.RefreshText();
+        RefreshAdapters();
+        ApplyLayout();
+        UpdateDetailsStatus();
+        Feedback.Text = "";
+        Save();
+    }
+
+    private void ApplyLanguage()
+    {
+        TextCatalog.Select(_settings.Language);
+        Language = System.Windows.Markup.XmlLanguage.GetLanguage(TextCatalog.Culture.IetfLanguageTag);
+        FlowDirection = TextCatalog.Culture.TextInfo.IsRightToLeft ? FlowDirection.RightToLeft : FlowDirection.LeftToRight;
+        var dictionary = TextCatalog.WindowResources();
+        if (Resources.MergedDictionaries.Count == 1)
+            Resources.MergedDictionaries.Add(dictionary);
+        else
+            Resources.MergedDictionaries[1] = dictionary;
+        AppColumn0.Header = T("Application");
+        AppColumn1.Header = T("DownRate");
+        AppColumn2.Header = T("UpRate");
+        AppColumn3.Header = T("DownTotal");
+        AppColumn4.Header = T("UpTotal");
+    }
+
+    private static string T(string key, params object[] args) => TextCatalog.Format(key, args);
 
     private void ThemeChanged(object sender, RoutedEventArgs e)
     {
@@ -744,7 +780,7 @@ public partial class MainWindow : Window
         catch (Exception ex) when (ex is System.IO.IOException or UnauthorizedAccessException)
         {
             _pendingSave = true;
-            Feedback.Text = "Sayaçlar Windows’a kaydedilemedi.";
+            Feedback.Text = T("SaveError");
             Debug.WriteLine(ex);
             return false;
         }
@@ -765,7 +801,7 @@ public partial class MainWindow : Window
             e.Cancel = true;
             SettingsPopup.IsOpen = QuotaPopup.IsOpen = false;
             Hide();
-            _tray?.Notify("Ölçüm sürüyor. Pencereyi açmak için tepsi simgesine çift tıklayın.");
+            _tray?.Notify(T("TrayHidden"));
             return;
         }
         _quit = true;

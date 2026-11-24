@@ -10,14 +10,22 @@ internal sealed class TrayMenu : IDisposable
 
     public TrayMenu(Action open, Action mini, Action restore, Action exit)
     {
-        _menu.Items.Add("BlessedLine’ı aç", null, (_, _) => open());
-        _menu.Items.Add("Küçük çubuğu göster", null, (_, _) => mini());
-        _menu.Items.Add("Bağlantıyı geri aç", null, (_, _) => restore());
+        _menu.Items.Add(TextCatalog.Format("TrayOpen"), null, (_, _) => open());
+        _menu.Items.Add(TextCatalog.Format("TrayMini"), null, (_, _) => mini());
+        _menu.Items.Add(TextCatalog.Format("RestoreWifi"), null, (_, _) => restore());
         _menu.Items.Add(new Forms.ToolStripSeparator());
-        _menu.Items.Add("Çıkış", null, (_, _) => exit());
+        _menu.Items.Add(TextCatalog.Format("Exit"), null, (_, _) => exit());
         _icon = new Forms.NotifyIcon { Icon = _symbol, Text = "BlessedLine", ContextMenuStrip = _menu, Visible = true };
         _icon.DoubleClick += (_, _) => open();
         _icon.BalloonTipClicked += (_, _) => open();
+    }
+
+    public void Localize()
+    {
+        _menu.Items[0].Text = TextCatalog.Format("TrayOpen");
+        _menu.Items[1].Text = TextCatalog.Format("TrayMini");
+        _menu.Items[2].Text = TextCatalog.Format("RestoreWifi");
+        _menu.Items[4].Text = TextCatalog.Format("Exit");
     }
 
     public void Update(string down, string up, string remaining)

@@ -17,9 +17,9 @@ internal sealed record AdapterChoice(NetworkInterface Interface, string Label, b
                 NetworkInterfaceType.Wireless80211 => "Wi-Fi",
                 NetworkInterfaceType.Ethernet or NetworkInterfaceType.GigabitEthernet or
                     NetworkInterfaceType.FastEthernetFx or NetworkInterfaceType.FastEthernetT =>
-                    IsNamedVpn(adapter) ? "VPN" : "Kablolu ağ",
-                NetworkInterfaceType.Ppp or NetworkInterfaceType.Tunnel => "VPN / paylaşım",
-                NetworkInterfaceType.Wwanpp or NetworkInterfaceType.Wwanpp2 => "Mobil ağ",
+                    IsNamedVpn(adapter) ? "VPN" : TextCatalog.Format("WiredNetwork"),
+                NetworkInterfaceType.Ppp or NetworkInterfaceType.Tunnel => TextCatalog.Format("VpnTethering"),
+                NetworkInterfaceType.Wwanpp or NetworkInterfaceType.Wwanpp2 => TextCatalog.Format("MobileNetwork"),
                 _ => null
             };
             if (kind is null || adapter.OperationalStatus != OperationalStatus.Up || IsWindowsFilter(adapter))
@@ -33,7 +33,7 @@ internal sealed record AdapterChoice(NetworkInterface Interface, string Label, b
         }
 
         return choices.OrderByDescending(choice => choice.HasGateway)
-            .ThenBy(choice => choice.Kind == "Wi-Fi" ? 0 : choice.Kind == "Kablolu ağ" ? 1 : 2)
+            .ThenBy(choice => choice.Kind == "Wi-Fi" ? 0 : choice.Kind == TextCatalog.Format("WiredNetwork") ? 1 : 2)
             .Select(choice =>
             {
                 var label = choices.Count(other => other.Kind == choice.Kind) == 1

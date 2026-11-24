@@ -36,7 +36,7 @@ public partial class App : Application
             }
             catch (UnauthorizedAccessException)
             {
-                MessageBox.Show("BlessedLine açık. Bildirim alanındaki simgeye çift tıklayın.", "BlessedLine");
+                MessageBox.Show(TextCatalog.Format("AlreadyOpen"), "BlessedLine");
             }
             Shutdown();
             return;

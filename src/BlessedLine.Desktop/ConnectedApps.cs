@@ -41,6 +41,15 @@ internal static class ConnectedApps
         return apps.Values.ToList();
     }
 
+    internal static string? ImagePath(int pid)
+    {
+        using var process = OpenProcess(0x1000, false, pid);
+        if (process.IsInvalid) return null;
+        var image = new StringBuilder(32768);
+        var size = image.Capacity;
+        return QueryFullProcessImageName(process, 0, image, ref size) ? image.ToString() : null;
+    }
+
     private static void AddOwners(HashSet<int> ids, int family)
     {
         int size = 0;

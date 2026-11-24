@@ -72,13 +72,16 @@ jobs:
               Start-Sleep -Milliseconds 700
               $compact = $window.Current.BoundingRectangle
               $hint = $window.FindFirst([System.Windows.Automation.TreeScope]::Descendants, [System.Windows.Automation.PropertyCondition]::new($e::AutomationIdProperty, 'QuotaHint'))
-              if ($hint.Current.Name -notlike '*kaldı*') { throw 'The compact bar did not show remaining quota.' }
+              if ($hint.Current.Name -notlike '*kotadan*kaldı*') { throw 'The compact bar did not show remaining quota.' }
               if ($compact.Width -ge $main.Width -or $compact.Height -ge $main.Height) { throw "Mini panel did not shrink, got $compact." }
               $mini.GetCurrentPattern($invoke).Invoke()
               Start-Sleep -Milliseconds 700
               $restored = $window.Current.BoundingRectangle
               if ([Math]::Abs($restored.Width - $main.Width) -gt 12) { throw 'Main panel did not return to the original width.' }
               Write-Host "BlessedLine opened and switched from $main to $compact and back."
+
+              $editor = $window.FindFirst([System.Windows.Automation.TreeScope]::Descendants, [System.Windows.Automation.PropertyCondition]::new($e::AutomationIdProperty, 'MiniQuotaButton'))
+              if ($null -eq $editor -or $editor.Current.IsOffscreen) { throw 'Mini quota editor was not visible.' }
               if ($compact.Height -gt 150) { throw "Mini bar is too tall: $compact" }
               $null = $p.CloseMainWindow()
               Start-Sleep -Milliseconds 600

@@ -17,6 +17,7 @@
     <Using Remove="System.Windows.Forms" />
     <Using Remove="System.Drawing" />
     <Resource Include="Assets/**/*" />
+    <EmbeddedResource Include="Languages.tsv" LogicalName="BlessedLine.Languages.tsv" />
     <PackageReference Include="Microsoft.Diagnostics.Tracing.TraceEvent" Version="3.2.8" />
     <ProjectReference Include="../BlessedLine.Core/BlessedLine.Core.csproj" />
   </ItemGroup>

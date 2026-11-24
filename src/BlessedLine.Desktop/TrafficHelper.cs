@@ -13,7 +13,7 @@ internal sealed class TrafficHelper : IDisposable
 {
     private readonly CancellationTokenSource _stop = new();
     private readonly Dictionary<string, AppTraffic> _pending = new(StringComparer.OrdinalIgnoreCase);
-    private string _status = "Windows izni bekleniyor…";
+    private string _status = "AwaitingPermission";
     private volatile bool _finished;
     public bool Finished => _finished;
     public sealed record Packet(string Status, AppTraffic[] Traffic);
@@ -55,12 +55,12 @@ internal sealed class TrafficHelper : IDisposable
                     }
                 }
             }
-            lock (_pending) _status = "Hız ölçümü sona erdi";
+            lock (_pending) _status = "RateMeasurementEnded";
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or OperationCanceledException or Win32Exception or InvalidOperationException or JsonException)
         {
             lock (_pending)
-                _status = ex is Win32Exception { NativeErrorCode: 1223 } ? "Ölçüm izni iptal edildi" : "Ölçüm yardımcısına erişilemedi";
+                _status = ex is Win32Exception { NativeErrorCode: 1223 } ? "PermissionCancelled" : "HelperUnavailable";
         }
         finally { _finished = true; }
     }

@@ -36,25 +36,25 @@
             <Border DockPanel.Dock="Top" Height="27" Background="{DynamicResource CaptionBrush}" CornerRadius="{DynamicResource FrameRadius}">
                 <DockPanel Margin="8,0,4,0">
                     <StackPanel DockPanel.Dock="Right" Orientation="Horizontal" VerticalAlignment="Center">
-                        <Button x:Name="MiniButton" Style="{DynamicResource CaptionButton}" Content="–" Click="ToggleMini" ToolTip="Sağ üstte küçük çubuğa indir"/>
-                        <Button x:Name="HideButton" Style="{DynamicResource CaptionButton}" Content="×" Click="CloseWindow" ToolTip="Bildirim alanına gizle"/>
+                        <Button x:Name="MiniButton" Style="{DynamicResource CaptionButton}" Content="–" Click="ToggleMini" ToolTip="{DynamicResource L_MinimizeTopRight}"/>
+                        <Button x:Name="HideButton" Style="{DynamicResource CaptionButton}" Content="×" Click="CloseWindow" ToolTip="{DynamicResource L_HideToTray}"/>
                     </StackPanel>
                     <TextBlock Text="BlessedLine" Foreground="{DynamicResource CaptionInk}" FontWeight="Bold" VerticalAlignment="Center"/>
                 </DockPanel>
             </Border>
             <DockPanel Margin="12,8,12,8">
                 <DockPanel x:Name="NetworkPanel" DockPanel.Dock="Top" Margin="0,0,0,8">
-                    <Button x:Name="SettingsButton" DockPanel.Dock="Right" Click="OpenSettings" Margin="6,0,0,0" AutomationProperties.Name="Ayarlar">
-                        <StackPanel Orientation="Horizontal"><Image Source="{StaticResource SettingsIcon}" Width="14" Height="14" Margin="0,0,4,0"/><TextBlock Text="Ayarlar…"/></StackPanel>
+                    <Button x:Name="SettingsButton" DockPanel.Dock="Right" Click="OpenSettings" Margin="6,0,0,0" AutomationProperties.Name="{DynamicResource L_Settings}">
+                        <StackPanel Orientation="Horizontal"><Image Source="{StaticResource SettingsIcon}" Width="14" Height="14" Margin="0,0,4,0"/><TextBlock Text="{DynamicResource L_SettingsEllipsis}"/></StackPanel>
                     </Button>
-                    <ComboBox x:Name="Adapters" DockPanel.Dock="Right" MinWidth="98" MaxWidth="135" DisplayMemberPath="Label" SelectionChanged="AdapterChanged" AutomationProperties.Name="Bağlantı"/>
-                    <TextBlock x:Name="NetworkStatus" Text="Ağ aranıyor…" Foreground="{DynamicResource Muted}" VerticalAlignment="Center" TextTrimming="CharacterEllipsis"/>
+                    <ComboBox x:Name="Adapters" DockPanel.Dock="Right" MinWidth="98" MaxWidth="135" DisplayMemberPath="Label" SelectionChanged="AdapterChanged" AutomationProperties.Name="{DynamicResource L_Connection}"/>
+                    <TextBlock x:Name="NetworkStatus" Text="{DynamicResource L_FindingNetworks}" Foreground="{DynamicResource Muted}" VerticalAlignment="Center" TextTrimming="CharacterEllipsis"/>
                 </DockPanel>
                 <Border x:Name="QuotaPanel" DockPanel.Dock="Top" Style="{StaticResource Pane}" Padding="10,7" Margin="0,0,0,6">
                     <StackPanel>
                         <DockPanel>
                             <TextBlock x:Name="QuotaPercent" DockPanel.Dock="Right" FontWeight="Bold" Foreground="{DynamicResource Accent}"/>
-                            <TextBlock x:Name="QuotaText" FontWeight="Bold" FontSize="14" Text="Toplam kullanım"/>
+                            <TextBlock x:Name="QuotaText" FontWeight="Bold" FontSize="14" Text="{DynamicResource L_TotalUsage}"/>
                         </DockPanel>
                         <Border Height="8" Background="{DynamicResource Alternate}" BorderBrush="{DynamicResource Line}" BorderThickness="1" Margin="0,6,0,4">
                             <Grid x:Name="Track" SizeChanged="TrackResized">
@@ -63,19 +63,19 @@
                         </Border>
                         <DockPanel>
                             <Button x:Name="MiniQuotaButton" DockPanel.Dock="Right" Click="EditQuota" Visibility="Collapsed"
-                                    ToolTip="Kotayı düzenle" AutomationProperties.Name="Kotayı düzenle">
+                                    ToolTip="{DynamicResource L_EditQuota}" AutomationProperties.Name="{DynamicResource L_EditQuota}">
                                 <Image Source="{StaticResource SettingsIcon}" Width="14" Height="14"/>
                             </Button>
-                            <Button x:Name="RestoreButton" DockPanel.Dock="Right" Content="Wi-Fi’yi geri aç" Click="RestoreConnection" Visibility="Collapsed"/>
-                            <Button x:Name="EditQuotaButton" DockPanel.Dock="Right" Content="Kota ayarla…" Click="EditQuota"/>
+                            <Button x:Name="RestoreButton" DockPanel.Dock="Right" Content="{DynamicResource L_RestoreWifi}" Click="RestoreConnection" Visibility="Collapsed"/>
+                            <Button x:Name="EditQuotaButton" DockPanel.Dock="Right" Content="{DynamicResource L_SetQuota}" Click="EditQuota"/>
                             <TextBlock x:Name="QuotaHint" Foreground="{DynamicResource Muted}" VerticalAlignment="Center" TextWrapping="Wrap"/>
                         </DockPanel>
                     </StackPanel>
                 </Border>
                 <Grid x:Name="RatesPanel" DockPanel.Dock="Top" Margin="4,0,4,8">
                     <Grid.ColumnDefinitions><ColumnDefinition/><ColumnDefinition/></Grid.ColumnDefinitions>
-                    <StackPanel><TextBlock Text="↓  İndirme" Foreground="{DynamicResource Muted}"/><TextBlock x:Name="DownloadRate" FontWeight="Bold" FontSize="17" Text="—"/></StackPanel>
-                    <StackPanel Grid.Column="1"><TextBlock Text="↑  Yükleme" Foreground="{DynamicResource Muted}"/><TextBlock x:Name="UploadRate" Text="—" FontWeight="Bold" FontSize="17"/></StackPanel>
+                    <StackPanel><TextBlock Text="{DynamicResource L_Download}" Foreground="{DynamicResource Muted}"/><TextBlock x:Name="DownloadRate" FontWeight="Bold" FontSize="17" Text="—"/></StackPanel>
+                    <StackPanel Grid.Column="1"><TextBlock Text="{DynamicResource L_Upload}" Foreground="{DynamicResource Muted}"/><TextBlock x:Name="UploadRate" Text="—" FontWeight="Bold" FontSize="17"/></StackPanel>
                 </Grid>
                 <Grid x:Name="MiniRates" DockPanel.Dock="Top" Visibility="Collapsed">
                     <Grid.ColumnDefinitions><ColumnDefinition/><ColumnDefinition/></Grid.ColumnDefinitions>
@@ -84,41 +84,43 @@
                 </Grid>
                 <TextBlock x:Name="Feedback" DockPanel.Dock="Bottom" FontSize="11" Margin="0,3,0,0" Foreground="{DynamicResource Muted}" TextWrapping="Wrap"/>
                 <Popup x:Name="QuotaPopup" PlacementTarget="{Binding ElementName=EditQuotaButton}" Placement="Bottom" StaysOpen="False" AllowsTransparency="True">
-                    <Border Style="{StaticResource Pane}" Padding="12" Width="288">
+                    <Border Style="{StaticResource Pane}" Padding="12" Width="304">
                         <StackPanel>
-                            <TextBlock Text="Sayaç ve kota" FontWeight="Bold" Margin="0,0,0,6"/>
-                            <DockPanel><Button Content="Yeni…" DockPanel.Dock="Right" Click="NewCounter" Margin="4,0,0,0"/>
-                                <ComboBox x:Name="Counters" DisplayMemberPath="Name" SelectionChanged="CounterChanged" AutomationProperties.Name="Sayaç"/></DockPanel>
-                            <TextBlock Text="Limit (MB)" Margin="0,8,0,3"/>
+                            <TextBlock Text="{DynamicResource L_CounterAndQuota}" FontWeight="Bold" Margin="0,0,0,6"/>
+                            <DockPanel><Button Content="{DynamicResource L_New}" DockPanel.Dock="Right" Click="NewCounter" Margin="4,0,0,0"/>
+                                <ComboBox x:Name="Counters" DisplayMemberPath="Name" SelectionChanged="CounterChanged" AutomationProperties.Name="{DynamicResource L_Counter}"/></DockPanel>
+                            <TextBlock Text="{DynamicResource L_LimitMb}" Margin="0,8,0,3"/>
                             <DockPanel><Button x:Name="ExtendButton" Content="+100 MB" DockPanel.Dock="Right" Click="ExtendLimit" Margin="4,0,0,0"/>
-                                <Button Content="Uygula" DockPanel.Dock="Right" Click="SetLimit" Margin="4,0,0,0"/>
-                                <TextBox x:Name="LimitInput" VerticalContentAlignment="Center" MaxLength="16" AutomationProperties.Name="Limit (MB)"/></DockPanel>
-                            <CheckBox x:Name="BlockCheck" Content="Kota dolunca Wi-Fi’yi kapat" Checked="ArmBlock" Unchecked="DisarmBlock" Margin="0,8"/>
-                            <WrapPanel><Button x:Name="PauseButton" Click="PauseCounter"/><Button Content="Sıfırla" Margin="4,0" Click="ResetCounter"/><Button Content="Sil" Click="DeleteCounter"/></WrapPanel>
+                                <Button Content="{DynamicResource L_Apply}" DockPanel.Dock="Right" Click="SetLimit" Margin="4,0,0,0"/>
+                                <TextBox x:Name="LimitInput" VerticalContentAlignment="Center" MaxLength="16" AutomationProperties.Name="{DynamicResource L_LimitMb}"/></DockPanel>
+                            <CheckBox x:Name="BlockCheck" Content="{DynamicResource L_WifiAtQuota}" Checked="ArmBlock" Unchecked="DisarmBlock" Margin="0,8"/>
+                            <WrapPanel><Button x:Name="PauseButton" Click="PauseCounter"/><Button Content="{DynamicResource L_Reset}" Margin="4,0" Click="ResetCounter"/><Button Content="{DynamicResource L_Delete}" Click="DeleteCounter"/></WrapPanel>
                         </StackPanel>
                     </Border>
                 </Popup>
                 <Popup x:Name="SettingsPopup" PlacementTarget="{Binding ElementName=SettingsButton}" Placement="Bottom" StaysOpen="False" AllowsTransparency="True">
-                    <Border Style="{StaticResource Pane}" Padding="12" Width="242">
+                    <Border Style="{StaticResource Pane}" Padding="12" Width="310">
                         <StackPanel>
-                            <TextBlock Text="Pencere teması" FontWeight="Bold" Margin="0,0,0,4"/>
+                            <TextBlock Text="{DynamicResource L_Language}" Margin="0,0,0,4"/>
+                            <ComboBox x:Name="LanguageList" DisplayMemberPath="Name" SelectedValuePath="Code" SelectionChanged="LanguageChanged" Margin="0,0,0,8"/>
+                            <TextBlock Text="{DynamicResource L_Theme}" FontWeight="Bold" Margin="0,0,0,4"/>
                             <StackPanel Orientation="Horizontal">
-                                <RadioButton x:Name="XpThemeOption" GroupName="Theme" Content="XP Klasik" Checked="ThemeChanged" Margin="0,3,12,3"/>
+                                <RadioButton x:Name="XpThemeOption" GroupName="Theme" Content="{DynamicResource L_ClassicTheme}" Checked="ThemeChanged" Margin="0,3,12,3"/>
                                 <RadioButton x:Name="AeroThemeOption" GroupName="Theme" Content="Windows 7 Aero" Checked="ThemeChanged" Margin="0,3"/>
                             </StackPanel>
-                            <CheckBox x:Name="PinDetails" Content="Ana panelde uygulamaları göster" Click="RememberDetails" Margin="0,10,0,4"/>
-                            <CheckBox x:Name="PinMiniDetails" Content="Mini çubukta uygulamaları göster" Click="RememberDetails" Margin="0,0,0,10"/>
-                            <TextBlock Text="Uyarı sesi" Margin="0,0,0,4"/>
-                            <DockPanel><Button DockPanel.Dock="Right" Content="Dinle" Click="PreviewSound" Margin="4,0,0,0"/>
-                                <ComboBox x:Name="Sounds" SelectionChanged="SoundChanged"><ComboBoxItem Content="Normal bildirim"/><ComboBoxItem Content="Yumuşak melodi"/><ComboBoxItem Content="Sert uyarı"/></ComboBox></DockPanel>
+                            <CheckBox x:Name="PinDetails" Content="{DynamicResource L_AppsInMain}" Click="RememberDetails" Margin="0,10,0,4"/>
+                            <CheckBox x:Name="PinMiniDetails" Content="{DynamicResource L_AppsInMini}" Click="RememberDetails" Margin="0,0,0,10"/>
+                            <TextBlock Text="{DynamicResource L_AlertSound}" Margin="0,0,0,4"/>
+                            <DockPanel><Button DockPanel.Dock="Right" Content="{DynamicResource L_PreviewSound}" Click="PreviewSound" Margin="4,0,0,0"/>
+                                <ComboBox x:Name="Sounds" SelectionChanged="SoundChanged"><ComboBoxItem Content="{DynamicResource L_StandardSound}"/><ComboBoxItem Content="{DynamicResource L_SoftSound}"/><ComboBoxItem Content="{DynamicResource L_StrongSound}"/></ComboBox></DockPanel>
                         </StackPanel>
                     </Border>
                 </Popup>
                 <DockPanel x:Name="AppsPanel">
                     <DockPanel DockPanel.Dock="Top" Margin="0,2,0,4">
                         <Button x:Name="DetailsButton" DockPanel.Dock="Right" Click="ToggleDetails"><TextBlock x:Name="DetailsLabel"/></Button>
-                        <Button x:Name="AuthorizeButton" DockPanel.Dock="Right" Content="Hızları ölç…" Click="Authorize" Margin="0,0,5,0"/>
-                        <TextBlock Text="Uygulamalar" FontWeight="Bold" FontSize="14" VerticalAlignment="Center"/>
+                        <Button x:Name="AuthorizeButton" DockPanel.Dock="Right" Content="{DynamicResource L_MeasureRates}" Click="Authorize" Margin="0,0,5,0"/>
+                        <TextBlock Text="{DynamicResource L_Applications}" FontWeight="Bold" FontSize="14" VerticalAlignment="Center"/>
                     </DockPanel>
                     <TextBlock x:Name="DetailStatus" DockPanel.Dock="Bottom" Margin="0,3,0,0" FontSize="11" Foreground="{DynamicResource Muted}" TextWrapping="Wrap"/>
                     <Grid>
@@ -128,7 +130,7 @@
                                   AlternatingRowBackground="{DynamicResource Alternate}" GridLinesVisibility="None" EnableRowVirtualization="True"
                                   HorizontalScrollBarVisibility="Auto" FontSize="11">
                             <DataGrid.Columns>
-                                <DataGridTemplateColumn Header="Uygulama" Width="*" MinWidth="100" SortMemberPath="Name">
+                                <DataGridTemplateColumn x:Name="AppColumn0" Header="" Width="*" MinWidth="100" SortMemberPath="Name">
                                     <DataGridTemplateColumn.CellTemplate><DataTemplate>
                                         <Grid ToolTip="{Binding Details}"><Grid.ColumnDefinitions><ColumnDefinition Width="26"/><ColumnDefinition/></Grid.ColumnDefinitions>
                                             <Image Source="{Binding Icon}" Width="16" Height="16"/>
@@ -136,10 +138,10 @@
                                         </Grid>
                                     </DataTemplate></DataGridTemplateColumn.CellTemplate>
                                 </DataGridTemplateColumn>
-                                <DataGridTextColumn Header="↓ Hız/sn" Binding="{Binding DownloadRateText}" SortMemberPath="DownloadRate" Width="76"/>
-                                <DataGridTextColumn Header="↑ Hız/sn" Binding="{Binding UploadRateText}" SortMemberPath="UploadRate" Width="76"/>
-                                <DataGridTextColumn Header="↓ Toplam" Binding="{Binding ReceivedText}" SortMemberPath="Received" Width="80"/>
-                                <DataGridTextColumn Header="↑ Toplam" Binding="{Binding SentText}" SortMemberPath="Sent" Width="80"/>
+                                <DataGridTextColumn x:Name="AppColumn1" Header="" Binding="{Binding DownloadRateText}" SortMemberPath="DownloadRate" Width="76"/>
+                                <DataGridTextColumn x:Name="AppColumn2" Header="" Binding="{Binding UploadRateText}" SortMemberPath="UploadRate" Width="76"/>
+                                <DataGridTextColumn x:Name="AppColumn3" Header="" Binding="{Binding ReceivedText}" SortMemberPath="Received" Width="80"/>
+                                <DataGridTextColumn x:Name="AppColumn4" Header="" Binding="{Binding SentText}" SortMemberPath="Sent" Width="80"/>
                             </DataGrid.Columns>
                         </DataGrid>
                         <TextBlock x:Name="EmptyApps" VerticalAlignment="Center" HorizontalAlignment="Center" Foreground="{DynamicResource Muted}" TextWrapping="Wrap" TextAlignment="Center"/>

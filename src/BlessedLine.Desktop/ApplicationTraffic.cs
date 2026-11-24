@@ -20,7 +20,7 @@ internal sealed class ApplicationTraffic : IDisposable
     private TraceEventSession? _session;
     private bool _disposed;
     public bool Failed { get; private set; }
-    private string _status = "Uygulama ölçümü başlatılıyor…";
+    private string _status = "MeasurementStarting";
 
     private sealed record ProcessIdentity(string? Path, DateTime StartedUtc, DateTime RetryAfterUtc = default);
 
@@ -37,7 +37,7 @@ internal sealed class ApplicationTraffic : IDisposable
             var lost = 0;
             try { lost = _session?.EventsLost ?? 0; }
             catch (COMException) { }
-            var status = lost > 0 ? $"Ölçümde veri kaybı var · {lost:N0} olay" : _status;
+            var status = lost > 0 ? $"EventsLost\t{lost}" : _status;
             var batch = _traffic.Values.ToArray();
             _traffic.Clear();
             return (status, batch);
@@ -70,14 +70,14 @@ internal sealed class ApplicationTraffic : IDisposable
                     return;
 
                 _session = session;
-                _status = "Uygulama ölçümü açık · tüm bağlantılar";
+                _status = "MeasurementActive";
             }
 
             try
             {
                 session.Source.Process();
                 lock (_gate)
-                    _status = "Uygulama ölçümü durdu";
+                    _status = "MeasurementStopped";
             }
             finally
             {
@@ -90,7 +90,7 @@ internal sealed class ApplicationTraffic : IDisposable
             Failed = true;
             Debug.WriteLine(ex);
             lock (_gate)
-                _status = "Uygulama ölçümü başlatılamadı · Windows ağ kaydına erişilemedi";
+                _status = "MeasurementFailed";
         }
     }
 
@@ -136,7 +136,7 @@ internal sealed class ApplicationTraffic : IDisposable
         try
         {
             using var process = Process.GetProcessById(pid);
-            found = new ProcessIdentity(process.MainModule?.FileName, process.StartTime.ToUniversalTime(), now.AddSeconds(2));
+            found = new ProcessIdentity(ConnectedApps.ImagePath(pid), process.StartTime.ToUniversalTime(), now.AddSeconds(2));
         }
         catch (Exception ex) when (ex is ArgumentException or InvalidOperationException or System.ComponentModel.Win32Exception or NotSupportedException)
         {
