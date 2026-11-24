@@ -1,5 +1,22 @@
 # Doğrulama kaydı
 
+## BlessedLine 0.6.1
+
+Windows’ta uygulama yolları yalnız aynı Windows hesabının işlemlerinden alınır. Yönetici yardımcısı, bağlanan sürecin kimliğini, oturumunu ve yürütülebilir dosya yolunu kontrol eder. Yerel kanalın erişim listesi oturum sahibinin hesabıyla sınırlıdır. Mesaj boyutları her yönde sınırlanır. Dış adrese otomatik ping yerine seçili bağlantının yerel ağ geçidi ölçülür.
+
+Windows ve Linux ayar kayıtları boyut sınırı ve atomik dosya değişimi kullanır. Linux ayar dizininin ve yeni dosyaların izinleri kullanıcıyla sınırlıdır. GitHub Actions sürümleri commit kimliklerine sabitlendi, Git kimlik bilgilerinin çalıştırıcının checkout’unda kalması kapatıldı ve doğrudan ve dolaylı NuGet bağımlılıkları tarandı. Tarama, kullanılan kaynaktan bilinen güvenlik açığı bildirmedi. [Güvenlik politikası](../SECURITY.md)
+
+Windows kaynak testleri iki ayrı çalıştırmada geçti. Standart kullanıcı görünümü, ölçüm, kota, güvenlik duvarı kuralları, tepsi ve farklı diller çalıştırıldı. Yardımcı süreç, başka bir yürütülebilir dosyaya ait kanalı ölçüm verisi göndermeden kapattı. Linux yayın dosyalarıyla 11 dilde arayüz, kota ve Wi-Fi komut çağrısı testleri geçti. Linux test işleminin en yüksek RSS değeri 30,0 MiB idi. [Windows kaynak testi](https://github.com/ugrqn/Blessed-Line-Net/actions/runs/45425403560)
+
+23 çekirdek testi ve 32 uygulama kontrolü her iki Windows paketinde geçti. Arşivler GitHub Releases’ten yeniden indirildi ve SHA-256 değerleri karşılaştırıldı. Her iki EXE’nin Authenticode sonucu `NotSigned`. [Windows paket testi](https://github.com/ugrqn/Blessed-Line-Net/actions/runs/45425975992) · [Arşivler ve SHA-256](https://github.com/ugrqn/Blessed-Line-Net/releases/tag/v0.6.1-preview)
+
+| Örneklenen çalışma kümesi | Windows x64 | Windows x86 |
+|---|---:|---:|
+| Ana pencere ve bağlantı bekleyen yardımcı, en yüksek toplam | 94,97 MiB | 94,94 MiB |
+| Tepsi, otomatik uygulama ölçümü açık, üç örneğin ortancası | 73,0 MiB | 67,3 MiB |
+
+Windows çalışma kümesi hedefleri ana süreç için 75 MiB ve yardımcı için 20 MiB. Örneklenen toplam ana pencereyi ve bağlantı bekleyen yardımcıyı kapsar. Güvenlik duvarı veya QoS kuralı yazılırken Windows kısa süreli ayrı bir PowerShell işlemi çalıştırır.
+
 ## BlessedLine 0.6.0
 
 Windows Server 2025 üzerinde 23 çekirdek testi ve 32 uygulama kontrolü çalıştı. Gerçek indirmede veri kotasının seçili EXE’nin bağlantısını kestiği, başka bir işlemin internet erişiminin sürdüğü ve satırdaki kilitle bağlantının geri açıldığı doğrulandı. Sıfırlama, BlessedLine’ın güvenlik duvarı ve QoS kurallarını temizledi. İlgisiz test kuralı korundu. [Windows kaynak testi](https://github.com/ugrqn/Blessed-Line-Net/actions/runs/45408926770)
