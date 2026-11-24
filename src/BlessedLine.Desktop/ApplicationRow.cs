@@ -6,6 +6,8 @@ namespace BlessedLine.Desktop;
 
 public sealed class ApplicationRow : INotifyPropertyChanged
 {
+    private static readonly PropertyChangedEventArgs AllProperties = new(null);
+
     public ApplicationRow(string? path, ImageSource fallback)
     {
         Path = path;
@@ -65,7 +67,7 @@ public sealed class ApplicationRow : INotifyPropertyChanged
     public string Details => !_measured
         ? $"{Name}\n{Path}\n{TextCatalog.Format("NoMeasurements")}"
         : $"{Name}\n{TextCatalog.Format("DownloadUploadTotals", TextCatalog.Bytes(Received), TextCatalog.Bytes(Sent))}\n{Path}".TrimEnd();
-    internal void RefreshText() => PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(null));
+    internal void RefreshText() => PropertyChanged?.Invoke(this, AllProperties);
 
     public string DownloadRateText => _measured ? TextCatalog.Bytes(DownloadRate) : "—";
     public string UploadRateText => _measured ? TextCatalog.Bytes(UploadRate) : "—";
@@ -85,6 +87,6 @@ public sealed class ApplicationRow : INotifyPropertyChanged
 
         DownloadRate = downloadRate;
         UploadRate = uploadRate;
-        PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(null));
+        PropertyChanged?.Invoke(this, AllProperties);
     }
 }

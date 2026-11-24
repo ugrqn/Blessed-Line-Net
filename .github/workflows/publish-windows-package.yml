@@ -6,7 +6,7 @@ on:
       tag:
         description: Existing release tag (for example, v0.3.0-preview)
         required: true
-        default: v0.5.0-preview
+        default: v0.6.0-preview
       sha256:
         description: SHA-256 of the verified checksum manifest on the downloads branch
         required: true

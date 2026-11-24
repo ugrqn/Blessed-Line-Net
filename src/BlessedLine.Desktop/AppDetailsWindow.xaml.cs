@@ -26,6 +26,7 @@ public partial class AppDetailsWindow : Window
         GraphHost.Child = _graph;
         ProgramIcon.Source = row.Icon;
         ProgramName.Text = row.Name;
+        Title = $"{TextCatalog.Format("AppDetails")} · {row.Name}";
         ProgramPath.Text = row.Path ?? TextCatalog.Format("InvalidAppPolicy");
         _policies.Changed += RefreshControls;
         Closed += (_, _) => _policies.Changed -= RefreshControls;
