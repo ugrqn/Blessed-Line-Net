@@ -66,7 +66,7 @@ if ($ReferenceArchive) {
 
 $resident = Start-Process -FilePath $executablePath -ArgumentList '--tray' -PassThru
 try {
-    Wait-For { (Get-ItemPropertyValue -LiteralPath $runKey -Name BlessedLine -ErrorAction SilentlyContinue) -eq $expected } 'Windows startup was not registered for the current user.'
+    Wait-For { (Get-ItemProperty -LiteralPath $runKey -ErrorAction SilentlyContinue).BlessedLine -eq $expected } 'Windows startup was not registered for the current user.'
     Start-Sleep -Seconds 5
     $resident.Refresh()
     if ($resident.HasExited -or $resident.MainWindowHandle -ne 0) { throw 'Tray startup did not remain in the background.' }
