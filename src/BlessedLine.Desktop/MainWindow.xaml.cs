@@ -23,7 +23,6 @@ public partial class MainWindow : Window
     private readonly Dictionary<string, ApplicationRow> _byApplication = new(StringComparer.OrdinalIgnoreCase);
     private readonly ObservableCollection<Counter> _counters = new();
     private readonly SettingsStore _store = new();
-    private readonly NetworkBlock _block = new();
     private readonly ImageSource _fallbackIcon;
     private TrayMenu? _tray;
     private TrafficHelper? _helper;
@@ -39,9 +38,7 @@ public partial class MainWindow : Window
     private SoundPlayer? _player;
     private AdapterChoice? _adapter;
     private TrafficReading? _previous;
-    private Guid? _armedCounter;
-    private Guid? _blockedCounter;
-    private string? _armedAdapter;
+    private WifiQuota? _wifiQuota;
     private bool _ready, _refreshing, _mini, _details, _pendingSave;
     private int _ticks;
     private double _mainLeft, _mainTop;
@@ -55,8 +52,6 @@ public partial class MainWindow : Window
         using var fallback = ApplicationIcon.Stock(2);
         _fallbackIcon = ApplicationIcon.Image(fallback);
         InitializeComponent();
-        using var settingsIcon = ApplicationIcon.Stock(106); // SIID_SETTINGS
-        SettingsSymbol.Source = ApplicationIcon.Image(settingsIcon);
         System.Windows.Application.Current.SessionEnding += (_, _) => _sessionEnding = true;
         StateChanged += (_, _) =>
         {
@@ -102,6 +97,10 @@ public partial class MainWindow : Window
         UpdateDetailsStatus();
         _timer.Start();
         _ = DiscoverAsync();
+        if (_isAdmin && Environment.GetCommandLineArgs().Contains("--arm-wifi"))
+            BlockCheck.IsChecked = true;
+        if (_isAdmin && Environment.GetCommandLineArgs().Contains("--restore-wifi"))
+            RestoreConnection(this, new());
     }
 
     private void RefreshAdapters()
@@ -112,8 +111,8 @@ public partial class MainWindow : Window
             var selected = list.FirstOrDefault(item => item.Id == _adapter?.Id)
                 ?? list.FirstOrDefault(item => item.Id == _settings.AdapterId)
                 ?? list.FirstOrDefault();
-            if (_adapter?.Id != selected?.Id && !ReleaseBlock())
-                return;
+            if (_settings.WifiRecovery is not null && selected?.Id != _settings.AdapterId)
+                selected = null;
 
             var current = Adapters.ItemsSource as IReadOnlyList<AdapterChoice>;
             if (current is null || !current.Select(item => (item.Id, item.Label)).SequenceEqual(list.Select(item => (item.Id, item.Label))))
@@ -133,7 +132,7 @@ public partial class MainWindow : Window
                 _adapter = selected;
 
             if (selected is null)
-                NetworkStatus.Text = "Bağlı ağ bulunamadı";
+                NetworkStatus.Text = _settings.WifiRecovery is null ? "Bağlı ağ bulunamadı" : "Wi-Fi kota nedeniyle kapalı";
         }
         catch (NetworkInformationException ex)
         {
@@ -147,17 +146,8 @@ public partial class MainWindow : Window
     {
         if (!_ready || _refreshing)
             return;
-        if (ReleaseBlock())
-        {
-            ChangeAdapter(Adapters.SelectedItem as AdapterChoice);
-            Save();
-        }
-        else
-        {
-            _refreshing = true;
-            Adapters.SelectedItem = (Adapters.ItemsSource as IEnumerable<AdapterChoice>)?.FirstOrDefault(item => item.Id == _adapter?.Id);
-            _refreshing = false;
-        }
+        ChangeAdapter(Adapters.SelectedItem as AdapterChoice);
+        Save();
     }
 
     private void ChangeAdapter(AdapterChoice? adapter)
@@ -174,7 +164,7 @@ public partial class MainWindow : Window
     {
         if (++_ticks % 5 == 0 || _adapter is null)
             RefreshAdapters();
-        if (_adapter is { } adapter)
+        if (_settings.WifiRecovery is null && _adapter is { } adapter)
             SampleAdapter(adapter);
 
         if (_ticks % 3 == 0 && (_details && IsVisible))
@@ -209,11 +199,9 @@ public partial class MainWindow : Window
                 return;
             }
 
-            NetworkStatus.Text = _block.IsActive ? $"{adapter.Label} · kota engeli açık" : $"{adapter.Label} · ölçülüyor";
+            NetworkStatus.Text = $"{adapter.Label} · ölçülüyor";
             DownloadRate.Text = Units.Format((long)(sample.Received / sample.Elapsed.TotalSeconds)) + "/sn";
             UploadRate.Text = Units.Format((long)(sample.Sent / sample.Elapsed.TotalSeconds)) + "/sn";
-            if (_block.IsActive)
-                return;
 
             foreach (var counter in _counters)
             {
@@ -226,11 +214,11 @@ public partial class MainWindow : Window
                     : $"{counter.Name} · limite yaklaşıldı";
                 PlaySound();
                 _tray?.Notify(Feedback.Text);
-                if (Save() && notification == CounterEvent.Limit && counter.Id == _armedCounter && adapter.Id == _armedAdapter)
-                    ApplyBlock(adapter.Id, counter.Id);
+                Save();
             }
 
             _pendingSave |= sample.Received > 0 || sample.Sent > 0;
+            CheckWifiQuota();
             UpdateQuota();
         }
         catch (Exception ex) when (ex is NetworkInformationException or OverflowException)
@@ -328,19 +316,22 @@ public partial class MainWindow : Window
             ? $"Toplam harcanan · {Units.Format(counter.UsedBytes)} / {Units.Format(limit)}"
             : $"Toplam harcanan · {Units.Format(counter.UsedBytes)}";
         QuotaPercent.Text = counter.LimitBytes is null ? "" : $"%{Math.Floor(_quotaFraction * 100):0}";
-        QuotaHint.Text = _block.IsActive ? "Seçili bağlantının ağ filtresi açık"
+        QuotaHint.Text = _settings.WifiRecovery is not null && !_mini ? "Wi-Fi kota nedeniyle kapalı"
             : counter.State == CounterState.Paused ? "Sayaç duraklatıldı"
             : counter.LimitBytes is null ? "Limit belirlenmedi"
             : counter.UsedBytes >= counter.LimitBytes ? "Limit doldu"
             : $"{Units.Format(counter.LimitBytes.Value - counter.UsedBytes)} kaldı";
-        if (counter.Direction != TrafficDirection.Both)
+        if (_mini && counter.LimitBytes is long total)
+            QuotaHint.Text = $"{Units.Format(total)} kotadan {Units.Format(Math.Max(0, total - counter.UsedBytes))} kaldı";
+        if (!_mini && counter.Direction != TrafficDirection.Both)
             QuotaHint.Text += counter.Direction == TrafficDirection.Download ? " · yalnız indirme" : " · yalnız yükleme";
         PauseButton.Content = counter.State == CounterState.Paused ? "Sürdür" : "Duraklat";
         ExtendButton.IsEnabled = counter.LimitBytes.HasValue;
         TrackFill.Background = _quotaFraction >= 1 ? FullBrush : AvailableBrush;
         QuotaPercent.Foreground = _quotaFraction >= 1 ? FullBrush : (Brush)FindResource("Accent");
         EditQuotaButton.Content = counter.LimitBytes.HasValue ? "Kotayı düzenle…" : "Kota ekle…";
-        RestoreButton.Visibility = _block.IsActive ? Visibility.Visible : Visibility.Collapsed;
+        RestoreButton.Visibility = _settings.WifiRecovery is not null ? Visibility.Visible : Visibility.Collapsed;
+        Adapters.IsEnabled = _settings.WifiRecovery is null;
         UpdateMarker();
     }
 
@@ -399,7 +390,7 @@ public partial class MainWindow : Window
         }
         QuotaPopup.IsOpen = false;
         if (MessageBox.Show(this, $"{counter.Name} silinsin mi?", "BlessedLine", MessageBoxButton.YesNo, MessageBoxImage.Question) != MessageBoxResult.Yes ||
-            (_blockedCounter == counter.Id && !ReleaseBlock())) return;
+            (_settings.WifiRecovery?.Counter == counter.Id && !RestoreWifi())) return;
         Counters.SelectedItem = _counters.First(item => item != counter);
         _counters.Remove(counter);
         Save();
@@ -415,7 +406,7 @@ public partial class MainWindow : Window
     private void ResetCounter(object sender, RoutedEventArgs e)
     {
         if (MessageBox.Show(this, $"{Current.Name} sıfırlansın mı?", "BlessedLine", MessageBoxButton.YesNo, MessageBoxImage.Question) != MessageBoxResult.Yes ||
-            (_blockedCounter == Current.Id && !ReleaseBlock())) return;
+            (_settings.WifiRecovery?.Counter == Current.Id && !RestoreWifi())) return;
         ClearArming();
         Current.Reset();
         UpdateQuota();
@@ -427,8 +418,9 @@ public partial class MainWindow : Window
         try
         {
             long? limit = string.IsNullOrWhiteSpace(LimitInput.Text) ? null : Units.ParseMegabytes(LimitInput.Text);
-            if (_blockedCounter == Current.Id && !ReleaseBlock()) return;
-            ClearArming();
+            if (_settings.WifiRecovery?.Counter == Current.Id &&
+                (limit is null || Current.UsedBytes < limit) && !RestoreWifi()) return;
+            if (limit is null) ClearArming();
             Current.LimitBytes = limit;
             Current.WarningBeforeBytes = limit is long bytes ? bytes / 10 : 0;
             Current.LimitDelivered = false;
@@ -436,6 +428,8 @@ public partial class MainWindow : Window
             UpdateQuota();
             Save();
             Feedback.Text = limit.HasValue ? "Limit güncellendi · %90’da uyarı" : "Limit kaldırıldı";
+            CheckWifiQuota();
+            UpdateQuota();
         }
         catch (Exception ex) when (ex is FormatException or OverflowException)
         {
@@ -449,7 +443,7 @@ public partial class MainWindow : Window
         {
             var currentLimit = Current.LimitBytes!.Value;
             var extended = checked(currentLimit + 100_000_000);
-            if (Current.UsedBytes < extended && _blockedCounter == Current.Id && !ReleaseBlock()) return;
+            if (Current.UsedBytes < extended && _settings.WifiRecovery?.Counter == Current.Id && !RestoreWifi()) return;
             Current.Extend(100_000_000);
             SetCounterFields();
             Save();
@@ -460,92 +454,108 @@ public partial class MainWindow : Window
     private void ArmBlock(object sender, RoutedEventArgs e)
     {
         if (!_ready) return;
-        if (_block.IsActive)
+        var counter = Current;
+        if (_settings.WifiRecovery is not null || counter.LimitBytes is not > 0 ||
+            _adapter?.Interface.NetworkInterfaceType != NetworkInterfaceType.Wireless80211 ||
+            !Guid.TryParse(_adapter.Id, out var adapter))
         {
             ClearArming();
-            Feedback.Text = "Yeni bir kota engeli için önce bağlantıyı geri açın.";
+            Feedback.Text = "Otomatik kapatma için Wi-Fi bağlantısını seçip kota ekleyin.";
             return;
         }
-        if (Current.LimitBytes is not long limit || Current.UsedBytes >= limit || _adapter is null)
-        {
-            ClearArming();
-            Feedback.Text = "Bağlantıyı kesmek için kalan payı olan bir limit ve bağlı bir ağ seçin.";
-            return;
-        }
+
         if (!_isAdmin)
         {
             ClearArming();
-            Feedback.Text = "Bağlantıyı kesmek için uygulamayı yönetici olarak açın.";
-            OfferElevation();
+            OfferElevation("--arm-wifi");
             return;
         }
 
-        var adapter = _adapter;
-        var counter = Current;
-        var answer = MessageBox.Show(this,
-            $"Kota dolunca {adapter.Label} üzerindeki internet ve yerel ağ trafiği kesilir. Bu Windows önizleme özelliğini açmak istiyor musun?",
-            "BlessedLine · kota engeli", MessageBoxButton.YesNo, MessageBoxImage.Warning);
-        if (answer != MessageBoxResult.Yes) { ClearArming(); return; }
-        if (_adapter?.Id != adapter.Id || Current.Id != counter.Id || counter.UsedBytes >= limit)
+        QuotaPopup.IsOpen = false;
+        var answer = MessageBox.Show(this, "Kota dolduğunda seçili Wi-Fi radyosu kapanır. Wi-Fi’yi geri aç butonuyla yeniden açabilirsiniz.",
+            "BlessedLine · Wi-Fi", MessageBoxButton.YesNo, MessageBoxImage.Warning);
+        if (answer != MessageBoxResult.Yes || Current.Id != counter.Id ||
+            !Guid.TryParse(_adapter?.Id, out var selected) || selected != adapter)
         {
             ClearArming();
-            Feedback.Text = "Onay sırasında bağlantı değişti veya limit doldu. Limiti kontrol edin.";
             return;
         }
-        _armedCounter = counter.Id;
-        _armedAdapter = adapter.Id;
+
+        _wifiQuota = new(counter.Id, adapter);
+        Feedback.Text = "Kota dolunca Wi-Fi otomatik kapanacak.";
+        CheckWifiQuota();
+        UpdateQuota();
     }
 
-    private void DisarmBlock(object sender, RoutedEventArgs e)
-    {
-        _armedCounter = null;
-        _armedAdapter = null;
-    }
+    private void DisarmBlock(object sender, RoutedEventArgs e) => _wifiQuota = null;
 
     private void ClearArming()
     {
-        _armedCounter = null;
-        _armedAdapter = null;
+        _wifiQuota = null;
         BlockCheck.IsChecked = false;
     }
 
-    private void ApplyBlock(string adapterId, Guid counter)
+    private void CheckWifiQuota()
     {
+        if (_wifiQuota is not { } quota || !Guid.TryParse(_adapter?.Id, out var adapter) ||
+            !quota.IsDue(Current, adapter) || _settings.WifiRecovery is not null) return;
+
+        ClearArming();
         try
         {
-            _block.Apply(adapterId);
-            _blockedCounter = counter;
-            Feedback.Text = "Kota doldu · seçili bağlantının ağ filtresi etkin.";
+            using var radio = WifiRadio.Open();
+            var enabled = radio.SoftwareEnabled(adapter);
+            if (enabled.Length == 0) throw new InvalidOperationException();
+            var entry = new WifiRecovery(adapter, quota.Counter, enabled);
+            _settings.WifiRecovery = entry;
+            if (!Save())
+            {
+                _settings.WifiRecovery = null;
+                return;
+            }
+            radio.Set(entry, enabled: false);
+            DownloadRate.Text = UploadRate.Text = "—";
+            NetworkStatus.Text = Feedback.Text = "Wi-Fi kota nedeniyle kapalı";
+            _tray?.Notify(Feedback.Text);
         }
         catch (Exception ex) when (ex is Win32Exception or InvalidOperationException)
         {
-            Feedback.Text = $"Ağ kesilemedi. {ex.Message}";
-            ClearArming();
+            RestoreWifi();
+            Feedback.Text = $"Wi-Fi kapatılamadı. {ex.Message}";
+            _tray?.Notify(Feedback.Text);
         }
     }
 
-    private bool ReleaseBlock()
+    private bool RestoreWifi()
     {
-        if (!_block.IsActive) return true;
+        if (_settings.WifiRecovery is not { } entry) return true;
         try
         {
-            _block.Release();
-            _blockedCounter = null;
-            ClearArming();
+            using var radio = WifiRadio.Open();
+            radio.Set(entry, enabled: true);
+            _settings.WifiRecovery = null;
             _previous = null;
+            Save();
             return true;
         }
         catch (Win32Exception ex)
         {
-            Feedback.Text = $"Filtre kaldırılamadı. Uygulamayı kapatıp yeniden açın. {ex.Message}";
+            Feedback.Text = $"Wi-Fi açılamadı. {ex.Message}";
             return false;
         }
     }
 
     private void RestoreConnection(object sender, RoutedEventArgs e)
     {
-        if (!ReleaseBlock()) return;
-        Feedback.Text = "Kota engeli kaldırıldı.";
+        if (_settings.WifiRecovery is null) return;
+        if (!_isAdmin)
+        {
+            OfferElevation("--restore-wifi");
+            return;
+        }
+        if (!RestoreWifi()) return;
+        Feedback.Text = "Wi-Fi yeniden açıldı.";
+        RefreshAdapters();
         UpdateQuota();
     }
 
@@ -567,15 +577,15 @@ public partial class MainWindow : Window
         }
     }
 
-    private void OfferElevation()
+    private void OfferElevation(string action)
     {
-        if (MessageBox.Show(this, "Uygulama ölçümünü ve kota engelini etkinleştirmek için BlessedLine’ı yönetici olarak yeniden aç.",
+        if (MessageBox.Show(this, "Wi-Fi radyosunu yönetmek için BlessedLine’ı yönetici olarak yeniden açın.",
             "BlessedLine", MessageBoxButton.OKCancel, MessageBoxImage.Information) != MessageBoxResult.OK) return;
         Save();
         try
         {
             var executable = Environment.ProcessPath ?? throw new InvalidOperationException();
-            using var process = Process.Start(new ProcessStartInfo(executable, "--handoff") { UseShellExecute = true, Verb = "runas" });
+            using var process = Process.Start(new ProcessStartInfo(executable, $"--handoff {action}") { UseShellExecute = true, Verb = "runas" });
             if (process is not null) Quit();
         }
         catch (Exception ex) when (ex is Win32Exception or InvalidOperationException)
@@ -641,7 +651,7 @@ public partial class MainWindow : Window
         ShowInTaskbar = !_mini;
         var mainSize = Math.Min(550, Math.Min(work.Width, work.Height) - 12);
         Width = _mini ? (_details ? 462 : 304) : mainSize;
-        Height = _mini ? (_details ? 282 : 123) : mainSize;
+        Height = _mini ? (_details ? 298 : 138) : mainSize;
         NetworkPanel.Visibility = RatesPanel.Visibility = EditQuotaButton.Visibility = _mini ? Visibility.Collapsed : Visibility.Visible;
         MiniRates.Visibility = _mini ? Visibility.Visible : Visibility.Collapsed;
         AppsPanel.Visibility = _mini && !_details ? Visibility.Collapsed : Visibility.Visible;
@@ -652,6 +662,8 @@ public partial class MainWindow : Window
         DetailsLabel.Text = _details ? "Detayı gizle" : "Detayı göster";
         MiniButton.Content = _mini ? "□" : "–";
         MiniButton.ToolTip = _mini ? "Ana pencereyi aç" : "Küçük çubuğa indir";
+        MiniQuotaButton.Visibility = _mini ? Visibility.Visible : Visibility.Collapsed;
+        UpdateQuota();
         if (_mini)
         {
             Left = work.Right - Width - 8;
@@ -659,7 +671,11 @@ public partial class MainWindow : Window
         }
     }
 
-    private void EditQuota(object sender, RoutedEventArgs e) => QuotaPopup.IsOpen = !QuotaPopup.IsOpen;
+    private void EditQuota(object sender, RoutedEventArgs e)
+    {
+        QuotaPopup.PlacementTarget = (UIElement)sender;
+        QuotaPopup.IsOpen = !QuotaPopup.IsOpen;
+    }
 
     private void ThemeChanged(object sender, RoutedEventArgs e)
     {
@@ -756,7 +772,7 @@ public partial class MainWindow : Window
         _timer.Stop();
         _helper?.Dispose();
         _tray?.Dispose();
-        ReleaseBlock();
+        if (_isAdmin && _ready) RestoreWifi();
         _applicationTraffic?.Dispose();
         _player?.Dispose();
         if (_ready) Save();

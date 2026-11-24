@@ -12,6 +12,8 @@ internal sealed class WindowStateData
     public string Theme { get; set; } = "XP";
     public bool MainDetails { get; set; } = true;
     public bool MiniDetails { get; set; }
+    public WifiRecovery? WifiRecovery { get; set; }
+    public string Language { get; set; } = "tr";
     public int Sound { get; set; }
 }
 
