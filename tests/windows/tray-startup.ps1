@@ -67,6 +67,7 @@ Remove-Item -LiteralPath $statePath -ErrorAction SilentlyContinue
 $firstRun = Start-Process -FilePath $executablePath -PassThru
 try {
     Wait-For { Test-Path $statePath } 'Fresh startup did not save the default counter.'
+    Wait-For { $firstRun.Refresh(); !$firstRun.HasExited -and $firstRun.MainWindowHandle -ne 0 } 'Fresh startup did not show the main window.'
     $initial = Get-Content $statePath -Raw | ConvertFrom-Json
     if ($initial.Counter.LimitBytes -ne 1000000000 -or $initial.Counter.WarningBeforeBytes -ne 100000000 -or
         $initial.ArmedWifi -or $firstRun.HasExited) {

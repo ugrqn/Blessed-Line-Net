@@ -29,7 +29,7 @@ Windows’ta eski sürüm açıksa bildirim alanındaki simgeden **Çıkış**�
 - Satırın sonundaki kilide basarak interneti kes veya geri aç. Üstteki sıfırlama simgesi BlessedLine’ın uygulama kurallarını, veri kotalarını ve QoS ayarlarını kaldırır. Windows yönetici onayı kurallar değişirken gerekebilir. Mevcut yönetici yardımcısı varsa onun yetkileri kullanılır.
 - Sağ tık menüsünden uygulamayı favoriye al. Favoriler her sıralamada önce gelir ve açılışlar arasında saklanır.
 - **Ayarlar → Trafik renklerini göster** açıkken indirme veya yükleme hızı 100 KB/sn’de sarıya, 1 MB/sn’de kırmızıya geçer.
-- Ping, seçili bağlantının **yerel ağ geçidine** ICMP gidiş dönüşünü gösterir. Yanıt yoksa çizgi görünür. **Wi-Fi bilgileri**, bağlı ağın sinyalini, kanalını, bağlantı hızlarını, IP yapılandırmasını ve Windows’un bildirdiği yakındaki ağları tıklayıp kopyalayabileceğin kutularda gösterir. Erişim noktası yayınlarsa ülke kodu da görünür. Windows erişim için konum izni isterse panelden ilgili ayarları açabilirsin.
+- Ping, seçili bağlantının **yerel ağ geçidine** ICMP gidiş dönüşünü gösterir. Yanıt yoksa çizgi görünür. **Wi-Fi bilgileri**, bağlı ağın sinyalini, kanalını, bağlantı hızlarını, IP yapılandırmasını ve Windows’un bildirdiği yakındaki ağları tıklayıp kopyalayabileceğin kutularda gösterir. Erişim noktası yayınlarsa ülke kodu ile üretici, model ve cihaz kategorisi de görünür. Ülke kodu telsiz ayarını belirtir. Windows erişim için konum izni isterse panelden ilgili ayarları açabilirsin.
 
 Kurallar EXE yoluna göre uygulanır. Paylaşılan Windows hizmetlerinde ve ayrı EXE kimliği bulunmayan satırlarda ağ müdahalesi kapalıdır. [Doğrulama raporu](docs/dogrulama.md#blessedline-060)
 

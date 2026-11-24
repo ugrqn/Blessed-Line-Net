@@ -83,8 +83,6 @@ public partial class WifiInfoWindow : Window
                 Add("WifiChannel", channel.ToString(TextCatalog.Culture));
         }
         WifiDiagnostics.AddAccessPointFacts(facts, network.Radio);
-        Add("WifiCity", T("WifiUnavailable"));
-        Add("WifiDevice", T("WifiUnavailable"));
         SelectedNetwork.ItemsSource = facts;
     }
 

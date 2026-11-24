@@ -3,12 +3,13 @@ using System.Globalization;
 using System.Net.NetworkInformation;
 using System.Runtime.InteropServices;
 using System.Text;
+using BlessedLine.Core;
 
 namespace BlessedLine.Desktop;
 
 internal sealed record WifiFact(string Label, string Value);
 internal sealed record WifiAccessPoint(string SsidId, string Bssid, int Rssi, uint FrequencyKhz, uint BssType,
-    bool Secure, string? Country, bool WifiDirect);
+    bool Secure, WifiAdvertisements Advertisements);
 internal sealed record WifiNetwork(string Name, uint Quality, string Security, string Cipher, string Standard,
     uint AccessPoints, string Profile, bool Connected, bool Connectable, WifiAccessPoint? Radio);
 internal sealed record WifiSnapshot(WifiFact[] Overview, WifiNetwork[] Nearby, string Status, bool NeedsLocation);
@@ -58,8 +59,6 @@ internal static class WifiDiagnostics
                 Add("WifiSecurity", $"{active.Security} / {active.Cipher}");
                 Add("WifiRxTx", $"↓ {active.Rx / 1000d:N1}   ↑ {active.Tx / 1000d:N1} Mb/s");
                 AddAccessPointFacts(facts, accessPoints.FirstOrDefault(point => point.Bssid == active.Bssid));
-                Add("WifiCity", T("WifiUnavailable"));
-                Add("WifiDevice", T("WifiUnavailable"));
             }
             var networks = radio.GetNearby(id, accessPoints);
             return new(facts.ToArray(), networks,
@@ -75,9 +74,20 @@ internal static class WifiDiagnostics
     internal static void AddAccessPointFacts(List<WifiFact> facts, WifiAccessPoint? point)
     {
         void Add(string label, string value) => facts.Add(new(T(label), value));
-        var country = point?.Country;
+        var advertised = point?.Advertisements;
+        var country = advertised?.Country;
         Add("WifiCountry", country is null ? T("WifiUnavailable") : FormatCountry(country));
+        Add("WifiCity", T("WifiUnavailable"));
+        Add("WifiDevice", T(advertised?.Device switch
+        {
+            AdvertisedWifiDevice.Phone => "WifiPhone",
+            AdvertisedWifiDevice.Computer => "WifiComputer",
+            AdvertisedWifiDevice.NetworkEquipment => "WifiEquipment",
+            _ => "WifiUnavailable"
+        }));
         if (point is null) return;
+        if (advertised?.Manufacturer is { } manufacturer) Add("WifiManufacturer", manufacturer);
+        if (advertised?.Model is { } model) Add("WifiModel", model);
         Add("WifiFrequency", $"{point.FrequencyKhz / 1000d:N0} MHz");
         Add("WifiRssi", $"{point.Rssi} dBm");
         Add("WifiTopology", point.BssType switch
@@ -86,7 +96,7 @@ internal static class WifiDiagnostics
             2 => T("WifiPeerToPeer"),
             _ => T("WifiUnavailable")
         });
-        if (point.WifiDirect) Add("WifiCapabilities", "Wi-Fi Direct");
+        if (point.Advertisements.Direct) Add("WifiCapabilities", "Wi-Fi Direct");
     }
 
     internal static int? Channel(uint khz)
@@ -180,41 +190,23 @@ internal sealed partial class WifiRadio
                 return [];
 
             var results = new List<WifiAccessPoint>(Math.Min(count, 512));
-            Span<byte> information = stackalloc byte[2];
+            var information = new byte[4096];
             for (var i = 0; i < Math.Min(count, 512); i++)
             {
                 var start = 8 + i * entrySize;
                 var pointer = list + start;
                 var entry = Marshal.PtrToStructure<BssEntry>(pointer);
                 var bssid = string.Join(":", entry.Bssid.Select(value => value.ToString("X2")));
-                string? country = null;
-                var direct = false;
+                var length = 0;
                 if (entry.IeOffset >= entrySize && entry.IeOffset <= byteCount - start &&
                     entry.IeSize <= byteCount - start - entry.IeOffset)
                 {
-                    var offset = (int)entry.IeOffset;
-                    var end = offset + (int)entry.IeSize;
-                    while (end - offset >= 2)
-                    {
-                        var tag = Marshal.ReadByte(pointer, offset++);
-                        var length = Marshal.ReadByte(pointer, offset++);
-                        if (length > end - offset) break;
-                        if (tag == 7 && length >= 3)
-                        {
-                            information[0] = Marshal.ReadByte(pointer, offset);
-                            information[1] = Marshal.ReadByte(pointer, offset + 1);
-                            if (information[0] is >= (byte)'A' and <= (byte)'Z' && information[1] is >= (byte)'A' and <= (byte)'Z')
-                                country = Encoding.ASCII.GetString(information);
-                        }
-                        else if (tag == 221 && length >= 4)
-                        {
-                            direct |= (uint)Marshal.ReadInt32(pointer, offset) == 0x099A6F50;
-                        }
-                        offset += length;
-                    }
+                    length = (int)Math.Min(entry.IeSize, (uint)information.Length);
+                    Marshal.Copy(pointer + (int)entry.IeOffset, information, 0, length);
                 }
+                var advertised = WifiAdvertisements.Read(information.AsSpan(0, length));
                 results.Add(new(entry.Ssid.Identity, bssid, entry.Rssi, entry.Frequency, entry.BssType,
-                    (entry.Capability & 0x10) != 0, country, direct));
+                    (entry.Capability & 0x10) != 0, advertised));
             }
             return results.ToArray();
         }
