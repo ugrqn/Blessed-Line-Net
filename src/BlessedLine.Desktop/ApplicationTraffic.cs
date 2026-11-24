@@ -19,6 +19,7 @@ internal sealed class ApplicationTraffic : IDisposable
     private readonly Thread _worker;
     private TraceEventSession? _session;
     private bool _disposed;
+    public bool Failed { get; private set; }
     private string _status = "Uygulama ölçümü başlatılıyor…";
 
     private sealed record ProcessIdentity(string? Path, DateTime StartedUtc, DateTime RetryAfterUtc = default);
@@ -86,6 +87,7 @@ internal sealed class ApplicationTraffic : IDisposable
         }
         catch (Exception ex)
         {
+            Failed = true;
             Debug.WriteLine(ex);
             lock (_gate)
                 _status = "Uygulama ölçümü başlatılamadı · Windows ağ kaydına erişilemedi";
@@ -176,6 +178,10 @@ internal static class ApplicationName
             "steamwebhelper" => "Steam Web",
             "discord" => "Discord",
             "ms-teams" or "teams" => "Teams",
+            "chatgpt" => "ChatGPT",
+            "codex" => "Codex",
+            "svchost" => "Windows Hizmeti",
+            "pwsh" or "powershell" => "PowerShell",
             "blessedline" => "BlessedLine",
             _ => executable.Length <= 25 ? executable : executable[..24] + "…"
         };

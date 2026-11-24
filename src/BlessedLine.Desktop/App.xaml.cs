@@ -9,6 +9,13 @@ public partial class App : Application
 
     protected override void OnStartup(StartupEventArgs e)
     {
+        if (e.Args is ["--traffic", var pipe, var owner] && Guid.TryParseExact(pipe, "N", out var id) && int.TryParse(owner, out var parent))
+        {
+            StartupUri = null;
+            TrafficHelper.Run(id, parent);
+            Shutdown();
+            return;
+        }
         _instance = new Mutex(false, @"Local\BlessedLine.Desktop");
         try
         {

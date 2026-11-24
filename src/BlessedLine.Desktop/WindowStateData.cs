@@ -9,7 +9,8 @@ internal sealed class WindowStateData
     public Counter? Counter { get; set; }
     public List<Counter>? SavedCounters { get; set; }
     public string? AdapterId { get; set; }
-    public bool MainDetails { get; set; }
+    public string Theme { get; set; } = "XP";
+    public bool MainDetails { get; set; } = true;
     public bool MiniDetails { get; set; }
     public int Sound { get; set; }
 }

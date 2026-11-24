@@ -7,7 +7,7 @@ using System.Net.NetworkInformation;
 using System.Security.Principal;
 using System.Windows;
 using System.Windows.Controls;
-using System.Windows.Media.Imaging;
+using System.Windows.Media;
 using System.Windows.Threading;
 using BlessedLine.Core;
 
@@ -24,7 +24,15 @@ public partial class MainWindow : Window
     private readonly ObservableCollection<Counter> _counters = new();
     private readonly SettingsStore _store = new();
     private readonly NetworkBlock _block = new();
-    private readonly BitmapImage _fallbackIcon = new(new Uri("pack://application:,,,/Assets/Uygulamalar.png"));
+    private readonly ImageSource _fallbackIcon;
+    private TrayMenu? _tray;
+    private TrafficHelper? _helper;
+    private bool _quit, _discoveryPending, _sessionEnding;
+    private string _measureStatus = "Bağlantılar listeleniyor · hız ölçümü kapalı";
+    private string _discoveryStatus = "";
+    private readonly HashSet<string> _connected = new(StringComparer.OrdinalIgnoreCase);
+    private static readonly SolidColorBrush AvailableBrush = new(Color.FromRgb(62, 146, 64));
+    private static readonly SolidColorBrush FullBrush = new(Color.FromRgb(193, 55, 45));
     private readonly bool _isAdmin = IsAdministrator();
     private WindowStateData _settings = new();
     private ApplicationTraffic? _applicationTraffic;
@@ -44,7 +52,18 @@ public partial class MainWindow : Window
 
     public MainWindow()
     {
+        using var fallback = ApplicationIcon.Stock(2);
+        _fallbackIcon = ApplicationIcon.Image(fallback);
         InitializeComponent();
+        System.Windows.Application.Current.SessionEnding += (_, _) => _sessionEnding = true;
+        StateChanged += (_, _) =>
+        {
+            if (_ready && WindowState == WindowState.Minimized)
+            {
+                WindowState = WindowState.Normal;
+                ShowPanel(true);
+            }
+        };
         Applications.ItemsSource = _rows;
         Counters.ItemsSource = _counters;
         _timer.Tick += (_, _) => Sample();
@@ -68,7 +87,10 @@ public partial class MainWindow : Window
         PinMiniDetails.IsChecked = _settings.MiniDetails;
         Sounds.SelectedIndex = Math.Clamp(_settings.Sound, 0, SoundNames.Length - 1);
 
-        _details = _settings.MainDetails;
+        ThemeList.SelectedIndex = _settings.Theme == "Win7" ? 1 : 0;
+        SetTheme();
+        _details = _settings.MainDetails || Environment.GetCommandLineArgs().Contains("--handoff");
+        _tray = new TrayMenu(() => ShowPanel(false), () => ShowPanel(true), () => RestoreConnection(this, new()), Quit);
         _ready = true;
         ApplyLayout();
         SetCounterFields();
@@ -77,6 +99,7 @@ public partial class MainWindow : Window
             _applicationTraffic = new ApplicationTraffic();
         UpdateDetailsStatus();
         _timer.Start();
+        _ = DiscoverAsync();
     }
 
     private void RefreshAdapters()
@@ -147,20 +170,24 @@ public partial class MainWindow : Window
 
     private void Sample()
     {
-        if (_adapter is null || ++_ticks % 5 == 0)
+        if (++_ticks % 5 == 0 || _adapter is null)
             RefreshAdapters();
         if (_adapter is { } adapter)
             SampleAdapter(adapter);
 
-        if (_applicationTraffic is { } traffic)
+        if (_ticks % 3 == 0 && (_details && IsVisible))
+            _ = DiscoverAsync();
+
+        var reading = _applicationTraffic?.Drain() ?? _helper?.Drain();
+        if (reading is { } measurement)
         {
-            var (status, batch) = traffic.Drain();
             var elapsed = (_clock.Elapsed - _lastAppSample).TotalSeconds;
             _lastAppSample = _clock.Elapsed;
-            UpdateAppRows(batch, elapsed > 0 && elapsed < 10 ? elapsed : 0);
-            if (_details)
-                DetailStatus.Text = status;
+            UpdateAppRows(measurement.Traffic, elapsed > 0 && elapsed < 10 ? elapsed : 0);
+            _measureStatus = measurement.Status;
         }
+        UpdateDetailsStatus();
+        _tray?.Update(DownloadRate.Text, UploadRate.Text, QuotaHint.Text);
         if (_pendingSave && _clock.Elapsed - _lastSave >= TimeSpan.FromSeconds(5))
             Save();
     }
@@ -196,6 +223,7 @@ public partial class MainWindow : Window
                     ? $"{counter.Name} · limit doldu"
                     : $"{counter.Name} · limite yaklaşıldı";
                 PlaySound();
+                _tray?.Notify(Feedback.Text);
                 if (Save() && notification == CounterEvent.Limit && counter.Id == _armedCounter && adapter.Id == _armedAdapter)
                     ApplyBlock(adapter.Id, counter.Id);
             }
@@ -235,6 +263,45 @@ public partial class MainWindow : Window
                 row.Update(null, seconds);
     }
 
+    private async Task DiscoverAsync()
+    {
+        if (_discoveryPending || _quit) return;
+        _discoveryPending = true;
+        try
+        {
+            var found = await Task.Run(ConnectedApps.Read);
+            if (_quit) return;
+            _connected.Clear();
+            foreach (var app in found)
+            {
+                _connected.Add(app.Path);
+                if (!_byApplication.TryGetValue(app.Path, out var row))
+                {
+                    row = new ApplicationRow(app.Path, _fallbackIcon);
+                    _byApplication.Add(app.Path, row);
+                    _rows.Add(row);
+                }
+                row.SetAppId(app.AppId);
+            }
+            foreach (var row in _rows.Where(row => row.Total == 0 && row.Path is not null && !_connected.Contains(row.Path)).ToArray())
+            {
+                _rows.Remove(row);
+                _byApplication.Remove(row.Path!);
+            }
+            _discoveryStatus = "";
+        }
+        catch (Exception ex) when (ex is Win32Exception or UnauthorizedAccessException or System.Runtime.InteropServices.COMException)
+        {
+            _discoveryStatus = "Bağlantı listesi okunamadı";
+            Debug.WriteLine(ex);
+        }
+        finally
+        {
+            _discoveryPending = false;
+            if (!_quit) UpdateDetailsStatus();
+        }
+    }
+
     private void CounterChanged(object sender, SelectionChangedEventArgs e)
     {
         if (!_ready) return;
@@ -268,7 +335,9 @@ public partial class MainWindow : Window
             QuotaHint.Text += counter.Direction == TrafficDirection.Download ? " · yalnız indirme" : " · yalnız yükleme";
         PauseButton.Content = counter.State == CounterState.Paused ? "Sürdür" : "Duraklat";
         ExtendButton.IsEnabled = counter.LimitBytes.HasValue;
-        QuotaWall.Opacity = counter.LimitBytes.HasValue ? 1 : 0.45;
+        TrackFill.Background = _quotaFraction >= 1 ? FullBrush : AvailableBrush;
+        QuotaPercent.Foreground = _quotaFraction >= 1 ? FullBrush : (Brush)FindResource("Accent");
+        EditQuotaButton.Content = counter.LimitBytes.HasValue ? "Kotayı düzenle…" : "Kota ekle…";
         RestoreButton.Visibility = _block.IsActive ? Visibility.Visible : Visibility.Collapsed;
         UpdateMarker();
     }
@@ -277,9 +346,7 @@ public partial class MainWindow : Window
 
     private void UpdateMarker()
     {
-        var position = Math.Max(0, WallTrack.ActualWidth - WifiMarker.Width) * _quotaFraction;
-        Canvas.SetLeft(WifiMarker, position);
-        TrackFill.Width = position + WifiMarker.Width / 2;
+        TrackFill.Width = Track.ActualWidth * _quotaFraction;
     }
 
     private void NewCounter(object sender, RoutedEventArgs e)
@@ -328,7 +395,7 @@ public partial class MainWindow : Window
             Feedback.Text = "Son sayacı silmek için önce yeni bir sayaç oluşturun.";
             return;
         }
-        SettingsPopup.IsOpen = false;
+        QuotaPopup.IsOpen = false;
         if (MessageBox.Show(this, $"{counter.Name} silinsin mi?", "BlessedLine", MessageBoxButton.YesNo, MessageBoxImage.Question) != MessageBoxResult.Yes ||
             (_blockedCounter == counter.Id && !ReleaseBlock())) return;
         Counters.SelectedItem = _counters.First(item => item != counter);
@@ -480,7 +547,23 @@ public partial class MainWindow : Window
         UpdateQuota();
     }
 
-    private void Authorize(object sender, RoutedEventArgs e) => OfferElevation();
+    private async void Authorize(object sender, RoutedEventArgs e)
+    {
+        if (_isAdmin)
+        {
+            _applicationTraffic?.Dispose();
+            _applicationTraffic = new ApplicationTraffic();
+        }
+        else
+        {
+            if (_helper is { Finished: false }) return;
+            _helper?.Dispose();
+            _helper = new TrafficHelper();
+            AuthorizeButton.IsEnabled = false;
+            try { await _helper.StartAsync(); }
+            finally { AuthorizeButton.IsEnabled = true; }
+        }
+    }
 
     private void OfferElevation()
     {
@@ -491,7 +574,7 @@ public partial class MainWindow : Window
         {
             var executable = Environment.ProcessPath ?? throw new InvalidOperationException();
             using var process = Process.Start(new ProcessStartInfo(executable, "--handoff") { UseShellExecute = true, Verb = "runas" });
-            if (process is not null) Close();
+            if (process is not null) Quit();
         }
         catch (Exception ex) when (ex is Win32Exception or InvalidOperationException)
         {
@@ -514,49 +597,75 @@ public partial class MainWindow : Window
 
     private void UpdateDetailsStatus()
     {
-        if (!_details)
-        {
-            DetailStatus.Text = "";
-            AuthorizeButton.Visibility = Visibility.Collapsed;
-            return;
-        }
-        AuthorizeButton.Visibility = _isAdmin ? Visibility.Collapsed : Visibility.Visible;
-        DetailStatus.Text = _isAdmin ? "Tüm bağlantılardaki uygulama trafiği" : "Yönetici erişimi gerekli";
+        var canStart = _isAdmin ? _applicationTraffic?.Failed == true : _helper is null or { Finished: true };
+        AuthorizeButton.Visibility = _details && canStart ? Visibility.Visible : Visibility.Collapsed;
+        DetailStatus.Text = _details ? (_discoveryStatus.Length > 0 ? _discoveryStatus : _measureStatus) : "";
+        EmptyApps.Visibility = _details && _rows.Count == 0 ? Visibility.Visible : Visibility.Collapsed;
+        EmptyApps.Text = "Ağ bağlantısı bekleniyor. Bir uygulamada sayfa açın.";
     }
 
-    private void ToggleMini(object sender, RoutedEventArgs e)
+    private void ToggleMini(object sender, RoutedEventArgs e) => ShowPanel(!_mini);
+
+    private void ShowPanel(bool mini)
     {
-        SettingsPopup.IsOpen = false;
-        if (!_mini) { _mainLeft = Left; _mainTop = Top; }
-        _mini = !_mini;
-        _details = _mini ? _settings.MiniDetails : _settings.MainDetails;
+        if (!_mini && mini) { _mainLeft = Left; _mainTop = Top; }
+        var restore = _mini && !mini;
+        SettingsPopup.IsOpen = QuotaPopup.IsOpen = false;
+        _mini = mini;
+        _details = mini ? _settings.MiniDetails : _settings.MainDetails;
         ApplyLayout();
-        UpdateDetailsStatus();
-        if (!_mini)
+        if (restore)
         {
-            var desktop = SystemParameters.WorkArea;
-            Left = Math.Clamp(_mainLeft, desktop.Left, Math.Max(desktop.Left, desktop.Right - Width));
-            Top = Math.Clamp(_mainTop, desktop.Top, Math.Max(desktop.Top, desktop.Bottom - Height));
+            var work = SystemParameters.WorkArea;
+            Left = Math.Clamp(_mainLeft, work.Left, Math.Max(work.Left, work.Right - Width));
+            Top = Math.Clamp(_mainTop, work.Top, Math.Max(work.Top, work.Bottom - Height));
         }
+        Show();
+        Activate();
+        UpdateDetailsStatus();
+        if (_details) _ = DiscoverAsync();
     }
 
     private void ApplyLayout()
     {
         var work = SystemParameters.WorkArea;
         Topmost = _mini;
-        var mainSize = Math.Min(568, Math.Min(work.Width, work.Height) - 12);
-        Width = _mini ? 365 : mainSize;
-        Height = _mini ? (_details ? 337 : 234) : mainSize;
-        NetworkPanel.Visibility = CounterPanel.Visibility = _mini ? Visibility.Collapsed : Visibility.Visible;
+        ShowInTaskbar = !_mini;
+        var mainSize = Math.Min(550, Math.Min(work.Width, work.Height) - 12);
+        Width = _mini ? (_details ? 462 : 304) : mainSize;
+        Height = _mini ? (_details ? 282 : 123) : mainSize;
+        NetworkPanel.Visibility = RatesPanel.Visibility = EditQuotaButton.Visibility = _mini ? Visibility.Collapsed : Visibility.Visible;
+        MiniRates.Visibility = _mini ? Visibility.Visible : Visibility.Collapsed;
+        AppsPanel.Visibility = _mini && !_details ? Visibility.Collapsed : Visibility.Visible;
+        Feedback.Visibility = _mini ? Visibility.Collapsed : Visibility.Visible;
         Applications.Visibility = _details ? Visibility.Visible : Visibility.Collapsed;
-        DetailsLabel.Text = _details ? "Uygulamalar ▴" : "Uygulamalar ▾";
-        MiniButton.Content = _mini ? "□" : "◫";
-        MiniButton.ToolTip = _mini ? "Ana panel" : "Mini panel";
+        QuotaText.Visibility = _mini ? Visibility.Collapsed : Visibility.Visible;
+        QuotaPercent.Visibility = _mini ? Visibility.Collapsed : Visibility.Visible;
+        DetailsLabel.Text = _details ? "Detayı gizle" : "Detayı göster";
+        MiniButton.Content = _mini ? "□" : "–";
+        MiniButton.ToolTip = _mini ? "Ana pencereyi aç" : "Küçük çubuğa indir";
         if (_mini)
         {
             Left = work.Right - Width - 8;
             Top = work.Top + 8;
         }
+    }
+
+    private void EditQuota(object sender, RoutedEventArgs e) => QuotaPopup.IsOpen = !QuotaPopup.IsOpen;
+
+    private void ThemeChanged(object sender, SelectionChangedEventArgs e)
+    {
+        if (!_ready) return;
+        _settings.Theme = ThemeList.SelectedIndex == 1 ? "Win7" : "XP";
+        SetTheme();
+        UpdateQuota();
+        Save();
+    }
+
+    private void SetTheme()
+    {
+        var name = _settings.Theme == "Win7" ? "Win7" : "XP";
+        Resources.MergedDictionaries[0] = new ResourceDictionary { Source = new Uri($"/BlessedLine;component/Themes/{name}.xaml", UriKind.Relative) };
     }
 
     private void OpenSettings(object sender, RoutedEventArgs e) => SettingsPopup.IsOpen = !SettingsPopup.IsOpen;
@@ -617,12 +726,28 @@ public partial class MainWindow : Window
         }
     }
 
-    private void Minimize(object sender, RoutedEventArgs e) => WindowState = WindowState.Minimized;
+    private void Quit()
+    {
+        _quit = true;
+        Close();
+    }
+
     private void CloseWindow(object sender, RoutedEventArgs e) => Close();
 
     private void OnClosing(object? sender, CancelEventArgs e)
     {
+        if (_ready && !_quit && !_sessionEnding && !Dispatcher.HasShutdownStarted)
+        {
+            e.Cancel = true;
+            SettingsPopup.IsOpen = QuotaPopup.IsOpen = false;
+            Hide();
+            _tray?.Notify("Ölçüm sürüyor. Pencereyi açmak için tepsi simgesine çift tıklayın.");
+            return;
+        }
+        _quit = true;
         _timer.Stop();
+        _helper?.Dispose();
+        _tray?.Dispose();
         ReleaseBlock();
         _applicationTraffic?.Dispose();
         _player?.Dispose();

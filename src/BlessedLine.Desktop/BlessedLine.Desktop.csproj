@@ -8,11 +8,13 @@
     <ImplicitUsings>enable</ImplicitUsings>
     <AssemblyName>BlessedLine</AssemblyName>
     <RootNamespace>BlessedLine.Desktop</RootNamespace>
-    <ApplicationIcon>Assets/BlessedLine.ico</ApplicationIcon>
+    <UseWindowsForms>true</UseWindowsForms>
     <Product>BlessedLine</Product>
-    <Version>0.2.0</Version>
+    <Version>0.3.0</Version>
   </PropertyGroup>
   <ItemGroup>
+    <Using Remove="System.Windows.Forms" />
+    <Using Remove="System.Drawing" />
     <Resource Include="Assets/**/*" />
     <PackageReference Include="Microsoft.Diagnostics.Tracing.TraceEvent" Version="3.2.8" />
     <ProjectReference Include="../BlessedLine.Core/BlessedLine.Core.csproj" />

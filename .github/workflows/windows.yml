@@ -1,0 +1,144 @@
+name: BlessedLine Windows smoke test
+on:
+  push:
+    branches: [main, revision/desktop-030]
+permissions:
+  contents: read
+jobs:
+  windows:
+    runs-on: windows-2025
+    timeout-minutes: 12
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 10.0.404
+      - name: Build and test
+        run: |
+          dotnet build BlessedLine.slnx -c Release
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          dotnet test BlessedLine.slnx -c Release --no-build
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+      - name: Start the WPF application and exercise the mini panel
+        shell: pwsh
+        run: |
+          Add-Type -AssemblyName UIAutomationClient, UIAutomationTypes
+          $e = [System.Windows.Automation.AutomationElement]
+          $p = Start-Process -FilePath './src/BlessedLine.Desktop/bin/Release/net10.0-windows/BlessedLine.exe' -PassThru
+          try {
+              for ($i = 0; $i -lt 30; $i++) {
+                  Start-Sleep -Milliseconds 500
+                  $p.Refresh()
+                  if ($p.HasExited) { throw "Application exited on startup with code $($p.ExitCode)." }
+                  if ($p.MainWindowHandle -ne 0) { break }
+              }
+              if ($p.MainWindowHandle -eq 0) { throw 'BlessedLine window did not appear.' }
+              $window = $e::FromHandle($p.MainWindowHandle)
+              $main = $window.Current.BoundingRectangle
+              if ([Math]::Abs($main.Width - $main.Height) -gt 12) { throw "Expected a square main panel, got $main." }
+              $condition = [System.Windows.Automation.PropertyCondition]::new($e::AutomationIdProperty, 'MiniButton')
+              $mini = $window.FindFirst([System.Windows.Automation.TreeScope]::Descendants, $condition)
+              if ($null -eq $mini) { throw 'Mini button not found.' }
+              $invoke = [System.Windows.Automation.InvokePattern]::Pattern
+              $mini.GetCurrentPattern($invoke).Invoke()
+              Start-Sleep -Milliseconds 700
+              $compact = $window.Current.BoundingRectangle
+              if ($compact.Width -ge $main.Width -or $compact.Height -ge $main.Height) { throw "Mini panel did not shrink, got $compact." }
+              $mini.GetCurrentPattern($invoke).Invoke()
+              Start-Sleep -Milliseconds 700
+              $restored = $window.Current.BoundingRectangle
+              if ([Math]::Abs($restored.Width - $main.Width) -gt 12) { throw 'Main panel did not return to the original width.' }
+              Write-Host "BlessedLine opened and switched from $main to $compact and back."
+              if ($compact.Height -gt 150) { throw "Mini bar is too tall: $compact" }
+              $null = $p.CloseMainWindow()
+              Start-Sleep -Milliseconds 600
+              $p.Refresh()
+              if ($p.HasExited -or $p.MainWindowHandle -ne 0) { throw 'Close did not hide the running application.' }
+              Write-Host 'X hid the window and kept the sampler running.'
+
+          } finally {
+              if (-not $p.HasExited) {
+                  $null = $p.CloseMainWindow()
+                  if (-not $p.WaitForExit(5000)) { $p.Kill() }
+              }
+          }
+      - name: Attribute real Windows downloads to two applications
+        shell: pwsh
+        run: |
+          $identity = [System.Security.Principal.WindowsIdentity]::GetCurrent()
+          $principal = [System.Security.Principal.WindowsPrincipal]::new($identity)
+          if (-not $principal.IsInRole([System.Security.Principal.WindowsBuiltInRole]::Administrator)) {
+              throw 'This runner is not elevated. ETW could not be exercised.'
+          }
+          Add-Type -AssemblyName UIAutomationClient, UIAutomationTypes
+          $element = [System.Windows.Automation.AutomationElement]
+          $scope = [System.Windows.Automation.TreeScope]::Descendants
+          $invoke = [System.Windows.Automation.InvokePattern]::Pattern
+          function ById($parent, $id) {
+              $condition = [System.Windows.Automation.PropertyCondition]::new($element::AutomationIdProperty, $id)
+              $parent.FindFirst($scope, $condition)
+          }
+          function VisibleNames($grid) {
+              $names = @()
+              $scroll = $null
+              $pattern = [System.Windows.Automation.ScrollPattern]::Pattern
+              if ($grid.TryGetCurrentPattern($pattern, [ref]$scroll) -and $scroll.Current.VerticallyScrollable) {
+                  $positions = @(0, 25, 50, 75, 100)
+              } else {
+                  $positions = @(-1)
+              }
+              foreach ($position in $positions) {
+                  if ($position -ge 0) {
+                      $scroll.SetScrollPercent(-1, $position)
+                      Start-Sleep -Milliseconds 200
+                  }
+                  $names += $grid.FindAll($scope, [System.Windows.Automation.Condition]::TrueCondition) |
+                      ForEach-Object { $_.Current.Name }
+              }
+              $names
+          }
+
+          $p = Start-Process -FilePath './src/BlessedLine.Desktop/bin/Release/net10.0-windows/BlessedLine.exe' -PassThru
+          $curl = $null
+          try {
+              for ($i = 0; $i -lt 30; $i++) {
+                  Start-Sleep -Milliseconds 500
+                  $p.Refresh()
+                  if ($p.HasExited) { throw "BlessedLine exited with code $($p.ExitCode)." }
+                  if ($p.MainWindowHandle -ne 0) { break }
+              }
+              if ($p.MainWindowHandle -eq 0) { throw 'BlessedLine window did not appear.' }
+              $window = $element::FromHandle($p.MainWindowHandle)
+              if ((ById $window 'DetailsLabel').Current.Name -eq 'Detayı göster') { (ById $window 'DetailsButton').GetCurrentPattern($invoke).Invoke() }
+              Start-Sleep -Seconds 2
+              $status = (ById $window 'DetailStatus').Current.Name
+              Write-Host "Application measurement status: $status"
+              if ($status -notlike 'Uygulama ölçümü açık*') { throw "ETW was not running: $status" }
+
+              $uri = 'https://raw.githubusercontent.com/microsoft/win32metadata/main/generation/WinSDK/RecompiledIdlHeaders/um/fwpmu.h'
+              $curl = Start-Process curl.exe -ArgumentList @('--silent','--fail','--limit-rate','8k','--max-time','45','--output','blessed-curl-download.tmp',$uri) -PassThru
+              $web = Invoke-WebRequest -Uri $uri
+              if ($web.RawContentLength -lt 10000) { throw 'The PowerShell process did not download the fixture.' }
+              $grid = ById $window 'Applications'
+              if ($null -eq $grid) { throw 'Application details grid did not appear.' }
+
+              for ($i = 0; $i -lt 15; $i++) {
+                  Start-Sleep -Seconds 1
+                  $names = @(VisibleNames $grid)
+                  if ($names -contains 'curl' -and $names -contains 'PowerShell') { break }
+              }
+              Write-Host ('Application table names and values: ' + (($names | Where-Object { $_ }) -join ' | '))
+              if ($names -notcontains 'curl' -or $names -notcontains 'PowerShell') {
+                  throw 'The applications table did not show both download processes.'
+              }
+              if (-not ($names | Where-Object { $_ -match '^[1-9].* KB$' })) {
+                  throw 'No nonzero KB-scale rate or transfer total was visible.'
+              }
+              Write-Host 'Real TCP traffic was attributed to curl and PowerShell.'
+          } finally {
+              if ($curl -and -not $curl.HasExited) { $curl.Kill() }
+              if (-not $p.HasExited) {
+                  $null = $p.CloseMainWindow()
+                  if (-not $p.WaitForExit(5000)) { $p.Kill() }
+              }
+          }
