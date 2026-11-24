@@ -11,7 +11,7 @@ namespace BlessedLine.Desktop;
 internal enum PolicyOperation { Block, Upload, ClearAll }
 
 internal sealed record PolicyRequest(PolicyOperation Operation, string? Path = null, long Value = 0);
-internal sealed record PolicyResult(bool Success, string? Error = null);
+internal sealed record PolicyResult(bool Success, string? Error = null, bool FirewallCleared = false);
 
 internal sealed class AppPolicyRule
 {
@@ -38,7 +38,7 @@ internal static class ApplicationPolicy
     internal static bool IsControllable(string? path)
     {
         if (string.IsNullOrWhiteSpace(path) || path.Length is < 8 or > 1024 ||
-            path[1] != ':' || path[2] != '\\' || !Path.IsPathFullyQualified(path)) return false;
+            !char.IsAsciiLetter(path[0]) || path[1] != ':' || path[2] != '\\' || !Path.IsPathFullyQualified(path)) return false;
         try
         {
             return string.Equals(Path.GetFullPath(path), path, StringComparison.OrdinalIgnoreCase) &&
@@ -73,7 +73,7 @@ internal static class ApplicationPolicy
                 case PolicyOperation.ClearAll:
                     var qosError = await TryClearAllUploadAsync().ConfigureAwait(false);
                     ClearAllBlocks();
-                    if (qosError is not null) return new(false, qosError);
+                    if (qosError is not null) return new(false, qosError, FirewallCleared: true);
                     break;
             }
             return new(true);
@@ -196,7 +196,7 @@ internal static class ApplicationPolicy
         var ruleName = Quote(name);
         var pathBase64 = Convert.ToBase64String(Encoding.Unicode.GetBytes(path));
         var rate = (kbps * 1000).ToString(CultureInfo.InvariantCulture);
-        var query = $"$app = [Text.Encoding]::Unicode.GetString([Convert]::FromBase64String('{pathBase64}')); " +
+        var query = $"Import-Module -Name $qosModule; $app = [Text.Encoding]::Unicode.GetString([Convert]::FromBase64String('{pathBase64}')); " +
             $"$q = Get-NetQosPolicy -Name {ruleName} -ErrorAction SilentlyContinue;";
         var command = kbps == 0
             ? $"if ($q) {{ Remove-NetQosPolicy -Name {ruleName} -Confirm:$false }}"
@@ -209,7 +209,7 @@ internal static class ApplicationPolicy
     {
         try
         {
-            await PowerShellAsync("if (Get-Command Get-NetQosPolicy -ErrorAction SilentlyContinue) {" +
+            await PowerShellAsync("if ([IO.File]::Exists($qosModule)) { Import-Module -Name $qosModule; " +
                 $"Get-NetQosPolicy | Where-Object {{ $_.Name -match '^BlessedLine\\.AppControls\\.[0-9A-F]{{24}}$' }} " +
                 "| ForEach-Object { Remove-NetQosPolicy -Name $_.Name -Confirm:$false }}").ConfigureAwait(false);
             return null;
@@ -228,16 +228,22 @@ internal static class ApplicationPolicy
         var windows = Environment.GetFolderPath(Environment.SpecialFolder.Windows);
         var native = Environment.Is64BitOperatingSystem && !Environment.Is64BitProcess ? "Sysnative" : "System32";
         var executable = Path.Combine(windows, native, "WindowsPowerShell", "v1.0", "powershell.exe");
+        var modules = Path.Combine(windows, "System32", "WindowsPowerShell", "v1.0", "Modules");
+        var modules64 = Convert.ToBase64String(Encoding.Unicode.GetBytes(modules));
         var encoded = Convert.ToBase64String(Encoding.Unicode.GetBytes(
-            "$ErrorActionPreference = 'Stop'; $ProgressPreference = 'SilentlyContinue'; " + script));
-        using var process = Process.Start(new ProcessStartInfo(executable,
-            $"-NoLogo -NoProfile -NonInteractive -EncodedCommand {encoded}")
+            "$ErrorActionPreference = 'Stop'; $ProgressPreference = 'SilentlyContinue'; $PSModuleAutoLoadingPreference = 'None'; " +
+            $"$env:PSModulePath = [Text.Encoding]::Unicode.GetString([Convert]::FromBase64String('{modules64}')); " +
+            "$qosModule = [IO.Path]::Combine($env:PSModulePath, 'NetQos', 'NetQos.psd1'); " + script));
+        var start = new ProcessStartInfo(executable, $"-NoLogo -NoProfile -NonInteractive -EncodedCommand {encoded}")
         {
             UseShellExecute = false,
             CreateNoWindow = true,
+            WorkingDirectory = Path.Combine(windows, "System32"),
             RedirectStandardOutput = true,
             RedirectStandardError = true
-        }) ?? throw new InvalidOperationException("Windows PowerShell");
+        };
+        start.Environment["PSModulePath"] = modules;
+        using var process = Process.Start(start) ?? throw new InvalidOperationException("Windows PowerShell");
         var output = process.StandardOutput.ReadToEndAsync();
         var error = process.StandardError.ReadToEndAsync();
         using var timeout = new CancellationTokenSource(TimeSpan.FromSeconds(20));

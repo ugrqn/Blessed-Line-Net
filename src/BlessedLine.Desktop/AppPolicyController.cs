@@ -108,12 +108,22 @@ internal sealed class AppPolicyController(WindowStateData state, SettingsStore s
         try
         {
             var result = await measurement.ApplyPolicyAsync(new(PolicyOperation.ClearAll));
-            if (!result.Success) return result;
-            state.AppRules.Clear();
+            if (!result.Success && !result.FirewallCleared) return result;
+            if (result.Success) state.AppRules.Clear();
+            else
+            {
+                foreach (var (path, rule) in state.AppRules.ToArray())
+                {
+                    rule.Blocked = rule.BudgetBlocked = false;
+                    rule.QuotaBytes = rule.UsedBytes = 0;
+                    if (rule.IsEmpty) state.AppRules.Remove(path);
+                }
+            }
             _queries.Clear();
             _dirty = true;
             Changed?.Invoke();
-            return Save();
+            var saved = Save();
+            return result.Success ? saved : result;
         }
         finally { _gate.Release(); }
     }

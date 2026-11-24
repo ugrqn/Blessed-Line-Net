@@ -42,6 +42,11 @@ function State {
     return Get-Content $statePath -Raw | ConvertFrom-Json -AsHashtable
 }
 
+function FixtureRule {
+    $rules = (State).AppRules
+    if ($rules) { return $rules[$fixture] }
+}
+
 function Wait-Check([scriptblock] $Predicate, [string] $Name, [int] $Count = 40) {
     for ($i = 0; $i -lt $Count; $i++) {
         if (& $Predicate) {
@@ -141,7 +146,7 @@ try {
     $upload = ById $ui::RootElement 'UploadCapInput'
     $upload.GetCurrentPattern($valuePattern).SetValue('1500')
     (ById $ui::RootElement 'ApplyUploadCap').GetCurrentPattern($invoke).Invoke()
-    Wait-Check { (State).AppRules[$fixture].UploadKbps -eq 1500 } 'Per-app upload cap is saved'
+    Wait-Check { (FixtureRule).UploadKbps -eq 1500 } 'Per-app upload cap is saved'
     $qos = @(Get-NetQosPolicy | Where-Object Name -Like "$group.*")
     Write-Host ('NetQoS: ' + ($qos | Select-Object Name, AppPathName, ThrottleRate | ConvertTo-Json -Compress))
     Check ($qos.Count -eq 1 -and $qos[0].AppPathName -ieq $fixture) 'Windows NetQoS installed the rule for the exact executable'
@@ -149,9 +154,9 @@ try {
     $quota = ById $ui::RootElement 'AppQuotaInput'
     $quota.GetCurrentPattern($valuePattern).SetValue('0,03')
     (ById $ui::RootElement 'ApplyAppQuota').GetCurrentPattern($invoke).Invoke()
-    Wait-Check { (State).AppRules[$fixture].QuotaBytes -eq 30000 } 'Individual data quota saves decimal MB'
+    Wait-Check { (FixtureRule).QuotaBytes -eq 30000 } 'Individual data quota saves decimal MB'
     $null = Fixture-Request
-    Wait-Check { (State).AppRules[$fixture].BudgetBlocked -eq $true } 'Attributed traffic triggers automatic per-app cutoff'
+    Wait-Check { (FixtureRule).BudgetBlocked -eq $true } 'Attributed traffic triggers automatic per-app cutoff'
     $blocks = @(Get-NetFirewallRule -Group $group)
     Check ($blocks.Count -eq 2 -and @($blocks | Get-NetFirewallApplicationFilter | Where-Object Program -EQ $fixture).Count -eq 2) 'Windows Firewall records both directions for the chosen executable'
     Check ((Fixture-Request) -ne 0) 'Internet connection is actually blocked'
@@ -165,7 +170,7 @@ try {
     $detail.GetCurrentPattern([System.Windows.Automation.WindowPattern]::Pattern).Close()
     $quick = ByName (FixtureRow) 'İnterneti geri aç'
     $quick.GetCurrentPattern($invoke).Invoke()
-    Wait-Check { (State).AppRules[$fixture].BudgetBlocked -ne $true -and (State).AppRules[$fixture].QuotaBytes -eq 0 } 'Quick icon restores connectivity and clears the reached quota'
+    Wait-Check { (FixtureRule).BudgetBlocked -ne $true -and (FixtureRule).QuotaBytes -eq 0 } 'Quick icon restores connectivity and clears the reached quota'
     Check ((Fixture-Request) -eq 0) 'Restored application can connect again'
 
     MouseAt (FixtureRow) 8 16 1
@@ -179,7 +184,7 @@ try {
 
     $quick = ByName (FixtureRow) 'İnterneti kes'
     $quick.GetCurrentPattern($invoke).Invoke()
-    Wait-Check { (State).AppRules[$fixture].Blocked -eq $true } 'Quick icon blocks manually without opening details'
+    Wait-Check { (FixtureRule).Blocked -eq $true } 'Quick icon blocks manually without opening details'
     New-NetFirewallRule -Name $sentinel -DisplayName $sentinel -Enabled False -Direction Outbound -Action Block | Out-Null
     (ById $window 'ClearPoliciesButton').GetCurrentPattern($invoke).Invoke()
     Wait-Check { (State).AppRules.Count -eq 0 } 'Clear all removes the app state'
