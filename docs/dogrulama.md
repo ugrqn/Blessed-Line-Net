@@ -1,5 +1,15 @@
 # Doğrulama kaydı
 
+## BlessedLine 0.4.0
+
+Windows kaynak derlemesi 21 birim testiyle birlikte geçti. Windows çalıştırıcısında ana ve mini pencere, mini panelden 1.234,5 MB kotanın yazılması, tepsiden dönüş, Aero tercihi, 11 dilde açılış, iki süreçte canlı trafik atfı ve standart kullanıcıda bağlantı listesi kontrol edildi. [Windows doğrulaması](https://github.com/ugrqn/Blessed-Line-Net/actions/runs/45377940525)
+
+Kota tetikleyici testleri mevcut kotanın aşılması, sınırı yeni geçme, sayaç duraklatma ve farklı bağdaştırıcıyı kapsamaktadır. GitHub Windows çalıştırıcısında fiziksel Wi-Fi radyosu yoktur. Radyo kapanması ve açılmasının donanımdaki sonucu [Windows kontrol listesinde](windows-kontrol.md) yer alır.
+
+Debian 13 üzerinde Linux arşivinden başlatılan Tk arayüzü, yerel ağ bağdaştırıcısı, mini panel ve 11 dil kontrolüyle açıldı. NetworkManager kapatma ve açma komutlarının çağrılması testte taklit edildi. Aynı Linux ortamında Chromium ile indirme sayfasının 11 dilinde tarayıcı diline göre açılış, Arapça ve Urduca sağdan sola yön, mobil yerleşim, dil değiştirme ve üç bağlantının hedefi kontrol edildi.
+
+Windows x64 ve x86 paketleri .NET çalışma zamanı dahil olarak üretildi ve 7-Zip bütünlük testinden geçti. SHA-256 listesi GitHub sürümünün Assets bölümündedir. [Sürüm](https://github.com/ugrqn/Blessed-Line-Net/releases/tag/v0.4.0-preview)
+
 ## BlessedLine 0.3.0
 
 Windows Server 2025 x64 çalıştırıcısında 15 birim testi geçti. WPF uygulaması açıldı. 550 × 550 ana pencere 304 × 123 küçük çubuğa geçti, ana boyutuna döndü ve × ile tepsiye gizlendi. EXE ikinci defa çalıştırılınca aynı pencere açıldı. Ayarlardan Windows 7 Aero seçildi ve tercih diske yazıldı. [Windows test kaydı](https://github.com/ugrqn/Blessed-Line-Net/actions/runs/45296969597)
