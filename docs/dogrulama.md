@@ -1,5 +1,20 @@
 # Doğrulama kaydı
 
+## BlessedLine 0.6.2
+
+Temiz Windows açılışında ana pencere açıldı. Sayaç 1.000 MB kota ve 100 MB uyarı payıyla kaydedildi. Yerel Wi-Fi kesme seçeneği kapalıydı. Windows Başlangıç klasöründeki BlessedLine kısayolunun görünen adı, simgesi, EXE hedefi ve tepsi parametresi doğrulandı. Eski Başlangıç kaydının taşınması ve Ayarlar’dan devre dışı bırakıp geri açma da test edildi.
+
+Kota düzenleme testi, geçmiş kullanım sınırın üzerindeyken değişikliklerin Wi-Fi’yi kesmediğini, yeni bir örnek eşiği aştığında kesme koşulunun oluştuğunu doğruladı. Wi-Fi bilgileri penceresi çalıştırıcıda açıldı. Ülke kodu ve cihaz bilgisi ayrıştırıcısı örnek radyo verisiyle, eksik veri durumları da kesik örneklerle test edildi. Windows çalıştırıcısında fiziksel Wi-Fi olmadığı için gerçek radyo kapatma, modem veya telefon davranışı ve yakındaki ağların yayını donanım testi gerektiriyor. [Microsoft WLAN verileri](https://learn.microsoft.com/en-us/windows/win32/api/wlanapi/ns-wlanapi-wlan_bss_entry)
+
+Her iki paketle 32 Windows kontrolü geçti. 26 çekirdek testi, Win7 teması, küçük panel ve 11 dilde açılış kontrolleri tamamlandı. Tarayıcıda 11 dilin mobil yerleşimi ve indirme hedefleri doğrulandı. GitHub Releases’ten yeniden indirilen dosyaların SHA-256 değerleri yerel dosyalarla eşleşti. [Windows paket testi](https://github.com/ugrqn/Blessed-Line-Net/actions/runs/45502103227)
+
+| Örneklenen çalışma kümesi | Windows x64 | Windows x86 |
+|---|---:|---:|
+| Ana pencere ve bağlantı bekleyen yardımcı, en yüksek toplam | 94,95 MiB | 94,97 MiB |
+| Tepsi, otomatik uygulama ölçümü açık, üç örneğin ortancası | 74,9 MiB | 72,7 MiB |
+
+Ana pencere ve yardımcı için 25 örnek 100 ms arayla alındı. Windows güvenlik duvarı veya QoS kuralı yazımında kısa süreli ayrı bir PowerShell işlemi kullanır.
+
 ## BlessedLine 0.6.1
 
 Windows’ta uygulama yolları yalnız aynı Windows hesabının işlemlerinden alınır. Yönetici yardımcısı, bağlanan sürecin kimliğini, oturumunu ve yürütülebilir dosya yolunu kontrol eder. Yerel kanalın erişim listesi oturum sahibinin hesabıyla sınırlıdır. Mesaj boyutları her yönde sınırlanır. Dış adrese otomatik ping yerine seçili bağlantının yerel ağ geçidi ölçülür.

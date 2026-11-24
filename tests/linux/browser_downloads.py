@@ -26,9 +26,12 @@ with sync_playwright() as playwright:
         assert page.locator("html").get_attribute("dir") == ("rtl" if locale in ("ar", "ur") else "ltr")
         downloads = page.locator(".download")
         assert downloads.count() == 3
-        assert all(re.search(r"/releases/download/v0\.(6\.0-preview/BlessedLine-0\.6\.0-win-x(64|86)\.7z|4\.0-preview/BlessedLine-0\.4\.0-linux\.tar\.gz)$",
-                             downloads.nth(index).get_attribute("href"))
-                   for index in range(3))
+        links = [downloads.nth(index).get_attribute("href") for index in range(3)]
+        windows_version = r"/releases/download/v(?P<version>\d+\.\d+\.\d+)-preview/BlessedLine-(?P=version)-win-"
+        x64 = re.search(windows_version + r"x64\.7z$", links[0])
+        x86 = re.search(windows_version + r"x86\.7z$", links[1])
+        assert x64 and x86 and x64["version"] == x86["version"]
+        assert re.search(r"/releases/download/v(?P<version>\d+\.\d+\.\d+)-preview/BlessedLine-(?P=version)-linux\.tar\.gz$", links[2])
         assert page.evaluate("document.documentElement.scrollWidth === innerWidth")
         page.close()
     page = browser.new_page(locale="en-US", viewport={"width": 1280, "height": 850})
