@@ -156,6 +156,13 @@ try {
     Check ($null -ne (ById $ui::RootElement 'RateSummary')) 'Live graph panel has download/upload readings'
     Stop-Transfer $live
 
+    $manual = ById $ui::RootElement 'BlockPolicyButton'
+    $manual.GetCurrentPattern($invoke).Invoke()
+    Wait-Check { (FixtureRule).Blocked -eq $true } 'The selected application can be blocked directly'
+    Check ((Fixture-Request) -ne 0) 'The direct block rejects a real connection'
+    $manual.GetCurrentPattern($invoke).Invoke()
+    Wait-Check { !$((FixtureRule).Blocked) } 'The direct block can be removed'
+
     $upload = ById $ui::RootElement 'UploadCapInput'
     $upload.GetCurrentPattern($valuePattern).SetValue('1500')
     (ById $ui::RootElement 'ApplyUploadCap').GetCurrentPattern($invoke).Invoke()
@@ -165,11 +172,10 @@ try {
     Check ($qos.Count -eq 1 -and $qos[0].AppPathName -ieq $fixture) 'Windows NetQoS installed the rule for the exact executable'
 
     $quota = ById $ui::RootElement 'AppQuotaInput'
-    $budgetTransfer = Start-FixtureTransfer
-    Start-Sleep -Milliseconds 1600
     $quota.GetCurrentPattern($valuePattern).SetValue('0,03')
     (ById $ui::RootElement 'ApplyAppQuota').GetCurrentPattern($invoke).Invoke()
     Wait-Check { (FixtureRule).QuotaBytes -eq 30000 } 'Individual data quota saves decimal MB'
+    $budgetTransfer = Start-FixtureTransfer
     Wait-Check { (FixtureRule).BudgetBlocked -eq $true } 'Attributed traffic triggers automatic per-app cutoff' 70
     Stop-Transfer $budgetTransfer
     $blocks = @(Get-NetFirewallRule -Group $group)
