@@ -27,7 +27,7 @@ public partial class AppDetailsWindow : Window
         ProgramIcon.Source = row.Icon;
         ProgramName.Text = row.Name;
         Title = $"{TextCatalog.Format("AppDetails")} · {row.Name}";
-        ProgramPath.Text = row.Path ?? TextCatalog.Format("InvalidAppPolicy");
+        ProgramPath.Text = row.Path is { } path ? System.IO.Path.GetFileName(path) : TextCatalog.Format("InvalidAppPolicy");
         _policies.Changed += RefreshControls;
         Closed += (_, _) => _policies.Changed -= RefreshControls;
         RefreshControls();

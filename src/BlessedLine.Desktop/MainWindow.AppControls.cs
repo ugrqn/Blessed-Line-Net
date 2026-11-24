@@ -1,5 +1,4 @@
 using System.ComponentModel;
-using System.Net;
 using System.Net.NetworkInformation;
 using System.Windows;
 using System.Windows.Controls;
@@ -14,7 +13,6 @@ public partial class MainWindow
     private AppDetailsWindow? _appDetails;
     private WifiInfoWindow? _wifiInfo;
     private readonly Ping _ping = new();
-    private static readonly IPAddress PingTarget = IPAddress.Parse("1.1.1.1");
     private bool _pingPending, _quickPolicyPending;
     private string _sortProperty = nameof(ApplicationRow.Name);
     private ListSortDirection _sortDirection = ListSortDirection.Ascending;
@@ -169,11 +167,16 @@ public partial class MainWindow
         _pingPending = true;
         try
         {
-            var result = await _ping.SendPingAsync(PingTarget, 1250);
-            if (!_quit)
+            var adapter = _adapter;
+            var gateway = adapter.Interface.GetIPProperties().GatewayAddresses
+                .Select(entry => entry.Address)
+                .FirstOrDefault(address => !address.Equals(System.Net.IPAddress.Any) && !address.Equals(System.Net.IPAddress.IPv6Any));
+            if (gateway is null) { PingValue.Text = "—"; return; }
+            var result = await _ping.SendPingAsync(gateway, 1250);
+            if (!_quit && _adapter == adapter)
                 PingValue.Text = result.Status == IPStatus.Success ? $"{result.RoundtripTime:N0} ms" : "—";
         }
-        catch (Exception ex) when (ex is PingException or ObjectDisposedException or InvalidOperationException)
+        catch (Exception ex) when (ex is PingException or NetworkInformationException or ObjectDisposedException or InvalidOperationException)
         {
             if (!_quit) PingValue.Text = "—";
         }

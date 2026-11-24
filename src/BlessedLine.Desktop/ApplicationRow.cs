@@ -65,8 +65,8 @@ public sealed class ApplicationRow : INotifyPropertyChanged
     public string ReceivedText => _measured ? TextCatalog.Bytes(Received) : "—";
     public string SentText => _measured ? TextCatalog.Bytes(Sent) : "—";
     public string Details => !_measured
-        ? $"{Name}\n{Path}\n{TextCatalog.Format("NoMeasurements")}"
-        : $"{Name}\n{TextCatalog.Format("DownloadUploadTotals", TextCatalog.Bytes(Received), TextCatalog.Bytes(Sent))}\n{Path}".TrimEnd();
+        ? $"{Name}\n{TextCatalog.Format("NoMeasurements")}"
+        : $"{Name}\n{TextCatalog.Format("DownloadUploadTotals", TextCatalog.Bytes(Received), TextCatalog.Bytes(Sent))}";
     internal void RefreshText() => PropertyChanged?.Invoke(this, AllProperties);
 
     public string DownloadRateText => _measured ? TextCatalog.Bytes(DownloadRate) : "—";

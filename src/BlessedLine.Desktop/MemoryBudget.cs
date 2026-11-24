@@ -5,8 +5,8 @@ namespace BlessedLine.Desktop;
 
 internal static class MemoryBudget
 {
-    internal const int DesktopMiB = 77;
-    internal const int HelperMiB = 21;
+    internal const int DesktopMiB = 75;
+    internal const int HelperMiB = 20;
     private const uint HardMaximumEnable = 4;
 
     internal static void Apply(int maxMiB)

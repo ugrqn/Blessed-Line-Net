@@ -7,6 +7,7 @@ import json
 import os
 import shutil
 import subprocess
+import tempfile
 import time
 import tkinter as tk
 from decimal import Decimal, InvalidOperation, ROUND_HALF_UP
@@ -32,7 +33,9 @@ DECIMAL_COMMA = {"tr", "es", "fr", "pt", "ru"}
 def read_state():
     state = {"used": 0, "limit": None, "interface": "", "locale": "tr", "theme": "xp", "wifi_off": False}
     try:
-        saved = json.loads((STATE_DIR / "settings.json").read_text(encoding="utf-8"))
+        with (STATE_DIR / "settings.json").open("rb") as file:
+            contents = file.read(65537)
+        saved = json.loads(contents) if len(contents) <= 65536 else None
         if isinstance(saved, dict):
             state.update({key: saved[key] for key in state if key in saved})
     except (OSError, ValueError):
@@ -354,15 +357,20 @@ class Monitor:
         self.speed.set(f"↓ {self.units(self.rate[0])}{per_second}     ↑ {self.units(self.rate[1])}{per_second}")
 
     def save(self):
+        temporary = None
         try:
-            temporary = STATE_DIR / "settings.tmp"
-            temporary.write_text(json.dumps(self.state, ensure_ascii=False), encoding="utf-8")
+            with tempfile.NamedTemporaryFile(mode="w", dir=STATE_DIR, encoding="utf-8", delete=False) as file:
+                temporary = Path(file.name)
+                json.dump(self.state, file, ensure_ascii=False)
             temporary.replace(STATE_DIR / "settings.json")
             self.last_save = time.monotonic()
             return True
         except OSError:
             self.status.set(self.label("SaveError"))
             return False
+        finally:
+            if temporary is not None:
+                temporary.unlink(missing_ok=True)
 
     def close(self):
         self.restore_wifi()
@@ -374,8 +382,12 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--version", action="version", version="BlessedLine 0.4.0 (Linux preview)")
     parser.parse_args()
-    STATE_DIR.mkdir(parents=True, exist_ok=True)
-    with (STATE_DIR / "instance.lock").open("w") as lock:
+    STATE_DIR.mkdir(mode=0o700, parents=True, exist_ok=True)
+    if STATE_DIR.is_symlink() or STATE_DIR.stat().st_uid != os.getuid():
+        parser.exit(1, "BlessedLine requires a settings directory owned by the current user.\n")
+    STATE_DIR.chmod(0o700)
+    lock_path = STATE_DIR / "instance.lock"
+    with os.fdopen(os.open(lock_path, os.O_WRONLY | os.O_CREAT | os.O_NOFOLLOW, 0o600), "w") as lock:
         try:
             fcntl.flock(lock, fcntl.LOCK_EX | fcntl.LOCK_NB)
         except BlockingIOError:

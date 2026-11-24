@@ -99,39 +99,30 @@ function MouseAt($element, [uint32] $down, [uint32] $up, [int] $clicks) {
 
 function HelperRam {
     $id = [Guid]::NewGuid().ToString('N')
-    $pipe = [IO.Pipes.NamedPipeServerStream]::new("BlessedLine-$id",[IO.Pipes.PipeDirection]::InOut,1,[IO.Pipes.PipeTransmissionMode]::Byte,[IO.Pipes.PipeOptions]::Asynchronous)
+    $worker = Start-Process $exe -ArgumentList @('--policy-only',$id,$PID) -PassThru
     try {
-        $worker = Start-Process $exe -ArgumentList @('--policy-only',$id,$PID) -PassThru
-        if (!$pipe.WaitForConnectionAsync().Wait(16000)) { throw 'Policy helper failed to connect.' }
-        $reader = [IO.StreamReader]::new($pipe, [Text.Encoding]::UTF8, $false, 1024, $true)
-        $writer = [IO.StreamWriter]::new($pipe, [Text.UTF8Encoding]::new($false), 1024, $true)
+        $max = 0
+        for ($i = 0; $i -lt 25; $i++) {
+            if ($worker.HasExited) { throw 'The helper exited before its pipe connection timeout.' }
+            $script:app.Refresh()
+            $worker.Refresh()
+            $max = [Math]::Max($max, $script:app.WorkingSet64 + $worker.WorkingSet64)
+            Start-Sleep -Milliseconds 100
+        }
+        Write-Host ("Peak sampled working set for UI + helper awaiting connection: {0:N2} MiB" -f ($max / 1MB))
+        Check ($max -le 100MB) 'App and pending helper working set at or below 100 MiB'
+        $pipe = [IO.Pipes.NamedPipeServerStream]::new("BlessedLine-$id", [IO.Pipes.PipeDirection]::InOut, 1,
+            [IO.Pipes.PipeTransmissionMode]::Byte, [IO.Pipes.PipeOptions]::Asynchronous)
         try {
-            $writer.AutoFlush = $true
-            $writer.WriteLine('{"Id":17,"Request":{"Operation":0,"Path":"C:\\Windows\\System32\\svchost.exe","Value":1}}')
-            $valid = $false
-            for ($i = 0; $i -lt 4; $i++) {
+            if (!$pipe.WaitForConnectionAsync().Wait(6000)) { throw 'Policy helper did not reach peer verification.' }
+            $reader = [IO.StreamReader]::new($pipe, [Text.Encoding]::UTF8, $false, 1024, $true)
+            try {
                 $read = $reader.ReadLineAsync()
-                if (!$read.Wait(4000) -or !$read.Result) { break }
-                $reply = $read.Result | ConvertFrom-Json
-                if ($reply.Policy.Id -eq 17) {
-                    $valid = !$reply.Policy.Result.Success -and $reply.Policy.Result.Error -eq 'InvalidAppPolicy'
-                    break
-                }
-            }
-            Check $valid 'Authenticated policy helper rejects a shared Windows process'
-            $max = 0
-            for ($i = 0; $i -lt 25; $i++) {
-                $script:app.Refresh()
-                $worker.Refresh()
-                $max = [Math]::Max($max, $script:app.WorkingSet64 + $worker.WorkingSet64)
-                Start-Sleep -Milliseconds 100
-            }
-            Write-Host ("Peak sampled working set for UI + helper: {0:N2} MiB" -f ($max / 1MB))
-            Check ($max -le 100MB) 'App and helper combined working set at or below 100 MiB'
-        } finally { $writer.Dispose(); $reader.Dispose() }
+                Check ($read.Wait(4000) -and $null -eq $read.Result) 'Policy helper rejects a foreign executable before sending data'
+            } finally { $reader.Dispose() }
+        } finally { $pipe.Dispose() }
     } finally {
-        $pipe.Dispose()
-        if ($worker -and !$worker.WaitForExit(5000)) { $worker.Kill(); throw 'Policy helper did not exit after disconnection.' }
+        if (!$worker.WaitForExit(5000)) { $worker.Kill(); throw 'Policy helper did not exit after rejecting the peer.' }
     }
 }
 

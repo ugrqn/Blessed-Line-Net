@@ -2,6 +2,7 @@ using System.ComponentModel;
 using Microsoft.Win32.SafeHandles;
 using System.Net;
 using System.Runtime.InteropServices;
+using System.Security.Principal;
 using System.Text;
 
 namespace BlessedLine.Desktop;
@@ -10,6 +11,22 @@ internal sealed record ConnectedApp(string Path, string? AppId);
 
 internal static class ConnectedApps
 {
+    private static readonly SecurityIdentifier? CurrentUser = GetCurrentSid();
+
+    private static SecurityIdentifier? GetCurrentSid()
+    {
+        using var identity = WindowsIdentity.GetCurrent();
+        return identity.User;
+    }
+
+    private static bool OwnedByCurrentUser(SafeProcessHandle process)
+    {
+        if (!OpenProcessToken(process, 8, out var token)) return false; // TOKEN_QUERY
+        using (token)
+        using (var identity = new WindowsIdentity(token.DangerousGetHandle()))
+            return identity.User is { } owner && CurrentUser is not null && CurrentUser.Equals(owner);
+    }
+
     public static List<ConnectedApp> Read()
     {
         var ids = new HashSet<int>();
@@ -22,7 +39,7 @@ internal static class ConnectedApps
             try
             {
                 using var process = OpenProcess(0x1000, false, pid); // PROCESS_QUERY_LIMITED_INFORMATION
-                if (process.IsInvalid) continue;
+                if (process.IsInvalid || !OwnedByCurrentUser(process)) continue;
                 image.Clear();
                 int size = image.Capacity;
                 if (!QueryFullProcessImageName(process, 0, image, ref size)) continue;
@@ -44,9 +61,13 @@ internal static class ConnectedApps
     internal static string? ImagePath(int pid)
     {
         using var process = OpenProcess(0x1000, false, pid);
-        if (process.IsInvalid) return null;
-        var image = new StringBuilder(32768);
+        if (process.IsInvalid || !OwnedByCurrentUser(process)) return null;
+        var image = new StringBuilder(1024);
         var size = image.Capacity;
+        if (QueryFullProcessImageName(process, 0, image, ref size)) return image.ToString();
+        if (Marshal.GetLastPInvokeError() != 122) return null;
+        image.EnsureCapacity(32768);
+        size = image.Capacity;
         return QueryFullProcessImageName(process, 0, image, ref size) ? image.ToString() : null;
     }
 
@@ -84,6 +105,9 @@ internal static class ConnectedApps
 
     [DllImport("kernel32.dll", SetLastError = true)]
     private static extern SafeProcessHandle OpenProcess(uint access, bool inherit, int pid);
+    [DllImport("advapi32.dll", SetLastError = true)]
+    [return: MarshalAs(UnmanagedType.Bool)]
+    private static extern bool OpenProcessToken(SafeProcessHandle process, uint access, out SafeAccessTokenHandle token);
     [DllImport("kernel32.dll", CharSet = CharSet.Unicode, SetLastError = true)]
     private static extern bool QueryFullProcessImageName(SafeProcessHandle process, uint flags, StringBuilder path, ref int length);
 
