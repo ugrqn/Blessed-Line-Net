@@ -5,13 +5,15 @@ public enum CounterState { Running, Paused }
 
 public sealed class Counter
 {
+    public const long DefaultWarningBytes = 100_000_000;
+
     public Guid Id { get; set; } = Guid.NewGuid();
     public string Name { get; set; } = "Yeni Sayaç";
     public TrafficDirection Direction { get; set; } = TrafficDirection.Both;
     public CounterState State { get; set; } = CounterState.Running;
     public long UsedBytes { get; set; }
     public long? LimitBytes { get; set; }
-    public long WarningBeforeBytes { get; set; }
+    public long WarningBeforeBytes { get; set; } = DefaultWarningBytes;
     public bool WarningDelivered { get; set; }
     public bool LimitDelivered { get; set; }
 
@@ -25,14 +27,20 @@ public sealed class Counter
             _ => checked(received + sent)
         };
         UsedBytes = checked(UsedBytes + increase);
-        if (LimitBytes is not long limit) return null;
+        return EvaluateThreshold();
+    }
+
+    public CounterEvent? EvaluateThreshold()
+    {
+        if (State == CounterState.Paused || LimitBytes is not > 0) return null;
+        var limit = LimitBytes.Value;
         if (UsedBytes >= limit && !LimitDelivered)
         {
             LimitDelivered = true;
             WarningDelivered = true;
             return CounterEvent.Limit;
         }
-        if (UsedBytes >= limit - WarningBeforeBytes && !WarningDelivered)
+        if (WarningBeforeBytes > 0 && UsedBytes < limit && UsedBytes >= limit - WarningBeforeBytes && !WarningDelivered)
         {
             WarningDelivered = true;
             return CounterEvent.Warning;
@@ -45,7 +53,7 @@ public sealed class Counter
         if (LimitBytes is not long current || bytes <= 0) throw new ArgumentOutOfRangeException(nameof(bytes));
         LimitBytes = checked(current + bytes);
         LimitDelivered = UsedBytes >= LimitBytes;
-        WarningDelivered = UsedBytes >= LimitBytes - WarningBeforeBytes;
+        WarningDelivered = LimitDelivered || (WarningBeforeBytes > 0 && UsedBytes >= LimitBytes - WarningBeforeBytes);
     }
 
     public void Reset()

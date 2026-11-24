@@ -12,8 +12,10 @@ internal sealed class WindowStateData
     public string Theme { get; set; } = "XP";
     public bool MainDetails { get; set; } = true;
     public bool MiniDetails { get; set; }
+    public WifiQuota? ArmedWifi { get; set; }
     public WifiRecovery? WifiRecovery { get; set; }
     public string Language { get; set; } = "tr";
+    public bool AutoMeasureApplications { get; set; } = true;
     public bool StartWithWindows { get; set; } = true;
     public int Sound { get; set; }
 }

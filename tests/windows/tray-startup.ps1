@@ -49,16 +49,14 @@ New-Item $profileDirectory -ItemType Directory -Force | Out-Null
 if ($ReferenceArchive) {
     $referenceFolder = Join-Path $env:RUNNER_TEMP 'blessed-reference'
     & 7z x $ReferenceArchive "-o$referenceFolder" -y | Out-Null
-    if ($LASTEXITCODE -ne 0) { throw 'Could not extract the 0.4.0 reference package.' }
-    $reference = Start-Process -FilePath (Join-Path $referenceFolder 'BlessedLine/BlessedLine.exe') -PassThru
+    if ($LASTEXITCODE -ne 0) { throw 'Could not extract the 0.4.1 reference package.' }
+    $reference = Start-Process -FilePath (Join-Path $referenceFolder 'BlessedLine/BlessedLine.exe') -ArgumentList '--tray' -PassThru
     try {
-        Wait-For { $reference.Refresh(); $reference.MainWindowHandle -ne 0 } 'Reference window never opened.'
-        Start-Sleep -Seconds 2
-        $null = $reference.CloseMainWindow()
-        Wait-For { $reference.Refresh(); $reference.MainWindowHandle -eq 0 } 'Reference window did not hide.'
-        Start-Sleep -Seconds 5
+        Start-Sleep -Seconds 6
+        $reference.Refresh()
+        if ($reference.HasExited -or $reference.MainWindowHandle -ne 0) { throw 'Reference tray start failed.' }
         $oldMemory = Memory-Snapshot $reference
-        Print-Memory '0.4.0 after opening then hiding its window' $oldMemory
+        Print-Memory '0.4.1 started in the tray without application measurement' $oldMemory
     } finally {
         Stop-Application $reference
     }
@@ -72,10 +70,7 @@ try {
     if ($resident.HasExited -or $resident.MainWindowHandle -ne 0) { throw 'Tray startup did not remain in the background.' }
 
     $newMemory = Memory-Snapshot $resident
-    Print-Memory '0.4.1 started directly in the tray' $newMemory
-    if ($ReferenceArchive -and $newMemory.Working -ge $oldMemory.Working) {
-        throw 'The tray start did not reduce resident memory relative to 0.4.0.'
-    }
+    Print-Memory '0.5.0 tray with automatic application measurement' $newMemory
 
     $duplicate = Start-Process -FilePath $executablePath -ArgumentList '--tray' -PassThru
     if (!$duplicate.WaitForExit(10000)) { Stop-Application $duplicate; throw 'A duplicate logon run did not exit.' }
@@ -92,5 +87,17 @@ try {
     Write-Host 'Startup registration, background counting, duplicate startup, and reopening the existing process passed.'
 } finally {
     Stop-Application $resident
+    Remove-ItemProperty -LiteralPath $runKey -Name BlessedLine -ErrorAction SilentlyContinue
+}
+
+@{ AutoMeasureApplications = $false } | ConvertTo-Json | Set-Content $statePath
+$lightweight = Start-Process -FilePath $executablePath -ArgumentList '--tray' -PassThru
+try {
+    Start-Sleep -Seconds 6
+    $lightweight.Refresh()
+    if ($lightweight.HasExited -or $lightweight.MainWindowHandle -ne 0) { throw 'Lightweight tray start failed.' }
+    Print-Memory '0.5.0 tray with application measurement disabled' (Memory-Snapshot $lightweight)
+} finally {
+    Stop-Application $lightweight
     Remove-ItemProperty -LiteralPath $runKey -Name BlessedLine -ErrorAction SilentlyContinue
 }

@@ -2,7 +2,6 @@ using System.Collections.ObjectModel;
 using System.ComponentModel;
 using System.Diagnostics;
 using System.Net.NetworkInformation;
-using System.Security.Principal;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Media;
@@ -26,7 +25,9 @@ public partial class MainWindow : Window
     private readonly string? _startupError;
     private readonly ImageSource _fallbackIcon;
     private readonly TrayMenu _tray;
-    private TrafficHelper? _helper;
+    private readonly TrafficMeasurement _measurement;
+    private readonly WifiControl _wifi;
+    private bool _syncingWifi;
     private bool _quit, _discoveryPending, _sessionEnding;
     private string _measureStatus = "ConnectionsOnly";
     private string _discoveryStatus = "";
@@ -34,27 +35,28 @@ public partial class MainWindow : Window
     private readonly HashSet<string> _updated = new(StringComparer.OrdinalIgnoreCase);
     private static readonly SolidColorBrush AvailableBrush = new(Color.FromRgb(62, 146, 64));
     private static readonly SolidColorBrush FullBrush = new(Color.FromRgb(193, 55, 45));
-    private readonly bool _isAdmin = IsAdministrator();
+    private bool _isAdmin => _measurement.Elevated;
     private readonly WindowStateData _settings;
-    private ApplicationTraffic? _applicationTraffic;
     private AdapterChoice? _adapter => _meter.Selected;
-    private WifiQuota? _wifiQuota;
+    private WifiQuota? _wifiQuota { get => _settings.ArmedWifi; set => _settings.ArmedWifi = value; }
     private bool _ready, _refreshing, _mini, _details, _pendingSave;
     private int _ticks;
     private double _mainLeft = double.NaN, _mainTop = double.NaN;
     private double _quotaFraction;
-    private TimeSpan _lastAppSample;
+    private TimeSpan? _lastAppSample;
     private TimeSpan _lastSave;
     private Counter Current => (Counter?)Counters.SelectedItem ?? _counters[0];
 
     internal MainWindow(WindowStateData settings, SettingsStore store, AdapterMeter meter, TrayMenu tray,
-        QuotaNotifications notifications, bool mini, string? startupError)
+        QuotaNotifications notifications, TrafficMeasurement measurement, WifiControl wifi, bool mini, string? startupError)
     {
         _settings = settings;
         _store = store;
         _meter = meter;
         _tray = tray;
         _notifications = notifications;
+        _measurement = measurement;
+        _wifi = wifi;
         _mini = mini;
         _startupError = startupError;
         using var fallback = ApplicationIcon.Stock(2);
@@ -88,6 +90,7 @@ public partial class MainWindow : Window
         PinMiniDetails.IsChecked = _settings.MiniDetails;
         Sounds.SelectedIndex = Math.Clamp(_settings.Sound, 0, Sounds.Items.Count - 1);
         StartupCheck.IsChecked = _settings.StartWithWindows;
+        AutoMeasureCheck.IsChecked = _settings.AutoMeasureApplications;
 
         (_settings.Theme == "Win7" ? AeroThemeOption : XpThemeOption).IsChecked = true;
         SetTheme();
@@ -96,8 +99,6 @@ public partial class MainWindow : Window
         ApplyLayout();
         SetCounterFields();
         RefreshAdapters();
-        if (_isAdmin)
-            _applicationTraffic = new ApplicationTraffic();
         UpdateDetailsStatus();
         _timer.Start();
         if (_details) _ = DiscoverAsync();
@@ -173,10 +174,10 @@ public partial class MainWindow : Window
         if (_ticks % 3 == 0 && (_details && IsVisible))
             _ = DiscoverAsync();
 
-        var reading = _applicationTraffic?.Drain() ?? _helper?.Drain();
+        var reading = _measurement.Drain();
         if (reading is { } measurement)
         {
-            var elapsed = (_clock.Elapsed - _lastAppSample).TotalSeconds;
+            var elapsed = _lastAppSample is { } last ? (_clock.Elapsed - last).TotalSeconds : 0;
             _lastAppSample = _clock.Elapsed;
             UpdateAppRows(measurement.Traffic, elapsed > 0 && elapsed < 10 ? elapsed : 0);
             _measureStatus = measurement.Status;
@@ -213,7 +214,7 @@ public partial class MainWindow : Window
             }
 
             _pendingSave |= sample.Received > 0 || sample.Sent > 0;
-            CheckWifiQuota();
+            _wifi.CheckLimit(_counters);
             UpdateQuota();
         }
         catch (Exception ex) when (ex is NetworkInformationException or OverflowException)
@@ -290,13 +291,13 @@ public partial class MainWindow : Window
     private void CounterChanged(object sender, SelectionChangedEventArgs e)
     {
         if (!_ready) return;
-        ClearArming();
         SetCounterFields();
         Save();
     }
 
     private void SetCounterFields()
     {
+        WarningInput.Text = (Current.WarningBeforeBytes / 1_000_000m).ToString("0.######", TextCatalog.Culture);
         LimitInput.Text = Current.LimitBytes is long limit
             ? (limit / 1_000_000m).ToString("0.######", TextCatalog.Culture)
             : "";
@@ -327,6 +328,9 @@ public partial class MainWindow : Window
         QuotaPercent.Foreground = _quotaFraction >= 1 ? FullBrush : (Brush)FindResource("Accent");
         EditQuotaButton.Content = counter.LimitBytes.HasValue ? T("EditQuotaEllipsis") : "Kota ekle…";
         RestoreButton.Visibility = _settings.WifiRecovery is not null ? Visibility.Visible : Visibility.Collapsed;
+        _syncingWifi = true;
+        BlockCheck.IsChecked = _wifiQuota?.Counter == counter.Id;
+        _syncingWifi = false;
         Adapters.IsEnabled = _settings.WifiRecovery is null;
         UpdateMarker();
     }
@@ -389,6 +393,7 @@ public partial class MainWindow : Window
             (_settings.WifiRecovery?.Counter == counter.Id && !RestoreWifi())) return;
         Counters.SelectedItem = _counters.First(item => item != counter);
         _counters.Remove(counter);
+        if (_wifiQuota?.Counter == counter.Id) ClearArming();
         Save();
     }
 
@@ -414,17 +419,25 @@ public partial class MainWindow : Window
         try
         {
             long? limit = string.IsNullOrWhiteSpace(LimitInput.Text) ? null : Units.ParseMegabytes(LimitInput.Text, TextCatalog.Culture);
+            var warning = string.IsNullOrWhiteSpace(WarningInput.Text)
+                ? 0 : Units.ParseMegabytes(WarningInput.Text, TextCatalog.Culture, allowZero: true);
             if (_settings.WifiRecovery?.Counter == Current.Id &&
                 (limit is null || Current.UsedBytes < limit) && !RestoreWifi()) return;
-            if (limit is null) ClearArming();
+            if (limit is null && _wifiQuota?.Counter == Current.Id) ClearArming();
+            if (Current.LimitBytes != limit)
+            {
+                Current.LimitDelivered = false;
+                Current.WarningDelivered = false;
+            }
+            else if (Current.WarningBeforeBytes != warning)
+                Current.WarningDelivered = false;
             Current.LimitBytes = limit;
-            Current.WarningBeforeBytes = limit is long bytes ? bytes / 10 : 0;
-            Current.LimitDelivered = false;
-            Current.WarningDelivered = false;
+            Current.WarningBeforeBytes = warning;
             UpdateQuota();
             Save();
             Feedback.Text = limit.HasValue ? T("LimitUpdated") : T("LimitRemoved");
-            CheckWifiQuota();
+            NotifyCurrentThreshold();
+            _wifi.CheckLimit(_counters);
             UpdateQuota();
         }
         catch (Exception ex) when (ex is FormatException or OverflowException)
@@ -451,18 +464,25 @@ public partial class MainWindow : Window
     {
         if (Current.LimitBytes is not long limit || limit <= QuotaStep) return;
         Current.LimitBytes = limit - QuotaStep;
-        Current.WarningBeforeBytes = Current.LimitBytes.Value / 10;
         Current.LimitDelivered = false;
         Current.WarningDelivered = false;
         SetCounterFields();
         Save();
-        CheckWifiQuota();
+        NotifyCurrentThreshold();
+        _wifi.CheckLimit(_counters);
         UpdateQuota();
+    }
+
+    private void NotifyCurrentThreshold()
+    {
+        if (Current.EvaluateThreshold() is not { } notification) return;
+        Feedback.Text = _notifications.Notify(Current, notification, _settings.Sound);
+        Save();
     }
 
     private void ArmBlock(object sender, RoutedEventArgs e)
     {
-        if (!_ready) return;
+        if (!_ready || _syncingWifi) return;
         var counter = Current;
         if (_settings.WifiRecovery is not null || counter.LimitBytes is not > 0 ||
             _adapter?.Interface.NetworkInterfaceType != NetworkInterfaceType.Wireless80211 ||
@@ -491,12 +511,19 @@ public partial class MainWindow : Window
         }
 
         _wifiQuota = new(counter.Id, adapter);
+        Save();
         Feedback.Text = T("WifiArmed");
-        CheckWifiQuota();
+        NotifyCurrentThreshold();
+        _wifi.CheckLimit(_counters);
         UpdateQuota();
     }
 
-    private void DisarmBlock(object sender, RoutedEventArgs e) => _wifiQuota = null;
+    private void DisarmBlock(object sender, RoutedEventArgs e)
+    {
+        if (!_ready || _syncingWifi) return;
+        _wifiQuota = null;
+        Save();
+    }
 
     private void ClearArming()
     {
@@ -504,54 +531,12 @@ public partial class MainWindow : Window
         BlockCheck.IsChecked = false;
     }
 
-    private void CheckWifiQuota()
-    {
-        if (_wifiQuota is not { } quota || !Guid.TryParse(_adapter?.Id, out var adapter) ||
-            !quota.IsDue(Current, adapter) || _settings.WifiRecovery is not null) return;
-
-        ClearArming();
-        try
-        {
-            using var radio = WifiRadio.Open();
-            var enabled = radio.SoftwareEnabled(adapter);
-            if (enabled.Length == 0) throw new InvalidOperationException();
-            var entry = new WifiRecovery(adapter, quota.Counter, enabled);
-            _settings.WifiRecovery = entry;
-            if (!Save())
-            {
-                _settings.WifiRecovery = null;
-                return;
-            }
-            radio.Set(entry, enabled: false);
-            DownloadRate.Text = UploadRate.Text = "—";
-            NetworkStatus.Text = Feedback.Text = T("WifiOff");
-            _tray.Notify(Feedback.Text);
-        }
-        catch (Exception ex) when (ex is Win32Exception or InvalidOperationException)
-        {
-            RestoreWifi();
-            Feedback.Text = T("WifiOffError", ex.Message);
-            _tray.Notify(Feedback.Text);
-        }
-    }
-
     private bool RestoreWifi()
     {
-        if (_settings.WifiRecovery is not { } entry) return true;
-        try
-        {
-            using var radio = WifiRadio.Open();
-            radio.Set(entry, enabled: true);
-            _settings.WifiRecovery = null;
-            _meter.Reset();
-            Save();
-            return true;
-        }
-        catch (Win32Exception ex)
-        {
-            Feedback.Text = T("WifiOnError", ex.Message);
-            return false;
-        }
+        var error = _wifi.Restore();
+        if (error is null) return true;
+        Feedback.Text = error;
+        return false;
     }
 
     private void RestoreConnection(object sender, RoutedEventArgs e) => RestoreConnection();
@@ -559,33 +544,39 @@ public partial class MainWindow : Window
     internal void RestoreConnection()
     {
         if (_settings.WifiRecovery is null) return;
-        if (!_isAdmin)
+        var blocked = _counters.FirstOrDefault(counter => counter.Id == _settings.WifiRecovery.Counter);
+        if (blocked is { LimitBytes: long limit } && blocked.UsedBytes >= limit)
+            ClearArming();
+        if (!RestoreWifi())
         {
-            OfferElevation("--restore-wifi");
+            if (!_isAdmin) OfferElevation("--restore-wifi");
             return;
         }
-        if (!RestoreWifi()) return;
-        Feedback.Text = T("WifiRestored");
+        ShowWifiStatus(T("WifiRestored"));
+    }
+
+    internal void ShowWifiStatus(string status)
+    {
+        Feedback.Text = status;
+        if (_settings.WifiRecovery is not null)
+        {
+            DownloadRate.Text = UploadRate.Text = "—";
+            NetworkStatus.Text = T("WifiOff");
+        }
         RefreshAdapters();
         UpdateQuota();
     }
 
-    private async void Authorize(object sender, RoutedEventArgs e)
+    internal void RefreshQuotaAfterAction(Counter counter)
     {
-        if (_isAdmin)
-        {
-            _applicationTraffic?.Dispose();
-            _applicationTraffic = new ApplicationTraffic();
-        }
-        else
-        {
-            if (_helper is { Finished: false }) return;
-            _helper?.Dispose();
-            _helper = new TrafficHelper();
-            AuthorizeButton.IsEnabled = false;
-            try { await _helper.StartAsync(); }
-            finally { AuthorizeButton.IsEnabled = true; }
-        }
+        if (ReferenceEquals(Current, counter)) SetCounterFields();
+        else UpdateQuota();
+    }
+
+    private void Authorize(object sender, RoutedEventArgs e)
+    {
+        _measurement.Start();
+        UpdateDetailsStatus();
     }
 
     private void OfferElevation(string action)
@@ -605,12 +596,6 @@ public partial class MainWindow : Window
         }
     }
 
-    private static bool IsAdministrator()
-    {
-        using var identity = WindowsIdentity.GetCurrent();
-        return new WindowsPrincipal(identity).IsInRole(WindowsBuiltInRole.Administrator);
-    }
-
     private void ToggleDetails(object sender, RoutedEventArgs e)
     {
         _details = !_details;
@@ -620,7 +605,7 @@ public partial class MainWindow : Window
 
     private void UpdateDetailsStatus()
     {
-        var canStart = _isAdmin ? _applicationTraffic?.Failed == true : _helper is null or { Finished: true };
+        var canStart = _measurement.CanStart;
         AuthorizeButton.Visibility = _details && canStart ? Visibility.Visible : Visibility.Collapsed;
         DetailStatus.Text = _details ? TextCatalog.Status(_discoveryStatus.Length > 0 ? _discoveryStatus : _measureStatus) : "";
         EmptyApps.Visibility = _details && _rows.Count == 0 ? Visibility.Visible : Visibility.Collapsed;
@@ -756,6 +741,21 @@ public partial class MainWindow : Window
         Save();
     }
 
+    private void AutoMeasureChanged(object sender, RoutedEventArgs e)
+    {
+        if (!_ready) return;
+        _settings.AutoMeasureApplications = AutoMeasureCheck.IsChecked == true;
+        if (_settings.AutoMeasureApplications) _measurement.Start();
+        else
+        {
+            _measurement.Stop();
+            _measureStatus = "ConnectionsOnly";
+            _lastAppSample = null;
+        }
+        UpdateDetailsStatus();
+        Save();
+    }
+
     private void StartupChanged(object sender, RoutedEventArgs e)
     {
         if (!_ready) return;
@@ -814,9 +814,7 @@ public partial class MainWindow : Window
         }
         _quit = true;
         _timer.Stop();
-        _helper?.Dispose();
-        if (_isAdmin && _ready) RestoreWifi();
-        _applicationTraffic?.Dispose();
+        if (_isAdmin && _ready) _wifi.Restore(reconnect: false);
         if (_ready) Save();
     }
 }

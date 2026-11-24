@@ -50,10 +50,13 @@ jobs:
         shell: pwsh
         run: |
           if ($env:GITHUB_REF_TYPE -eq 'tag') {
-              ./tests/windows/tray-startup.ps1 -Executable $env:BLESSED_EXE -ReferenceArchive 'release-files/BlessedLine-0.4.0-win-${{ matrix.arch }}.7z'
+              ./tests/windows/tray-startup.ps1 -Executable $env:BLESSED_EXE -ReferenceArchive 'release-files/BlessedLine-0.4.1-win-${{ matrix.arch }}.7z'
           } else {
               ./tests/windows/tray-startup.ps1 -Executable $env:BLESSED_EXE
           }
+      - name: Verify topmost quota warnings and actions in tray mode
+        shell: pwsh
+        run: ./tests/windows/quota-alert.ps1 -Executable $env:BLESSED_EXE
       - name: Start the WPF application and exercise the mini panel
         shell: pwsh
         run: |
@@ -93,11 +96,13 @@ jobs:
               Start-Sleep -Milliseconds 500
               $input = $e::RootElement.FindFirst([System.Windows.Automation.TreeScope]::Descendants, [System.Windows.Automation.PropertyCondition]::new($e::AutomationIdProperty, 'LimitInput'))
               $input.GetCurrentPattern([System.Windows.Automation.ValuePattern]::Pattern).SetValue('1234,5')
+              $warning = $e::RootElement.FindFirst([System.Windows.Automation.TreeScope]::Descendants, [System.Windows.Automation.PropertyCondition]::new($e::AutomationIdProperty, 'WarningInput'))
+              $warning.GetCurrentPattern([System.Windows.Automation.ValuePattern]::Pattern).SetValue('150')
               $apply = $e::RootElement.FindFirst([System.Windows.Automation.TreeScope]::Descendants, [System.Windows.Automation.PropertyCondition]::new($e::AutomationIdProperty, 'ApplyLimitButton'))
               $apply.GetCurrentPattern($invoke).Invoke()
               Start-Sleep -Milliseconds 500
               $edited = Get-Content (Join-Path $profile 'state.json') -Raw | ConvertFrom-Json
-              if ($edited.Counter.LimitBytes -ne 1234500000) { throw 'Editing the mini quota did not persist.' }
+              if ($edited.Counter.LimitBytes -ne 1234500000 -or $edited.Counter.WarningBeforeBytes -ne 150000000) { throw 'Editing the mini quota did not persist.' }
               if ($compact.Width -ge $main.Width -or $compact.Height -ge $main.Height) { throw "Mini panel did not shrink, got $compact." }
               $mini.GetCurrentPattern($invoke).Invoke()
               Start-Sleep -Milliseconds 700
@@ -240,6 +245,8 @@ jobs:
           Add-Type -AssemblyName UIAutomationClient, UIAutomationTypes
           $element = [System.Windows.Automation.AutomationElement]
           $scope = [System.Windows.Automation.TreeScope]::Descendants
+          $statePath = Join-Path $env:LOCALAPPDATA 'BlessedLine/state.json'
+          @{ AutoMeasureApplications = $false } | ConvertTo-Json | Set-Content $statePath
           $curl = Start-Process curl.exe -ArgumentList @('--silent','--fail','--limit-rate','2k','--max-time','60','--output','blessed-standard.tmp',$uri) -PassThru
           try {
               & runas.exe /trustlevel:0x20000 "$exe"

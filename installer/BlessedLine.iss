@@ -1,5 +1,5 @@
 #define AppName "BlessedLine"
-#define AppVersion "0.4.1"
+#define AppVersion "0.5.0"
 
 [Setup]
 AppId={{A8CD5EE4-5B28-471E-9C1B-06155D13D696}
@@ -10,7 +10,7 @@ DefaultGroupName=BlessedLine
 SetupIconFile=..\src\BlessedLine.Desktop\Assets\BlessedLine.ico
 UninstallDisplayIcon={app}\BlessedLine.exe
 OutputDir=..\artifacts\installer
-OutputBaseFilename=BlessedLine-0.4.1-win-x64
+OutputBaseFilename=BlessedLine-0.5.0-win-x64
 ArchitecturesAllowed=x64compatible
 ArchitecturesInstallIn64BitMode=x64compatible
 PrivilegesRequired=admin

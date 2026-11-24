@@ -17,6 +17,8 @@ public partial class App : Application
     private TrayMenu? _tray;
     private TrayMonitor? _monitor;
     private QuotaNotifications? _notifications;
+    private TrafficMeasurement? _traffic;
+    private WifiControl? _wifi;
 
     protected override void OnStartup(StartupEventArgs e)
     {
@@ -70,9 +72,13 @@ public partial class App : Application
         _listener = ThreadPool.RegisterWaitForSingleObject(_restore, (_, _) =>
             Dispatcher.BeginInvoke(() => ShowWindow(mini: false)), null, Timeout.Infinite, false);
         _tray = new TrayMenu(() => ShowWindow(mini: false), () => ShowWindow(mini: true), RestoreWifi, ExitApplication);
-        _notifications = new QuotaNotifications(_tray);
+        _traffic = new TrafficMeasurement();
+        _wifi = new WifiControl(_settings, _store, _meter, ReportWifi);
+        _notifications = new QuotaNotifications(_settings, () => _wifi.CanCut, ApplyQuotaAction);
+        if (_settings.AutoMeasureApplications)
+            Dispatcher.BeginInvoke(_traffic.Start);
         if (startInTray)
-            _monitor = new TrayMonitor(_settings, _store, _meter, _tray, _notifications);
+            _monitor = new TrayMonitor(_settings, _store, _meter, _tray, _notifications, _wifi);
         else
             ShowWindow(mini: false);
     }
@@ -102,10 +108,56 @@ public partial class App : Application
 
         _monitor?.Dispose();
         _monitor = null;
-        var window = new MainWindow(_settings, _store, _meter, _tray!, _notifications!, mini, _startupError);
+        var window = new MainWindow(_settings, _store, _meter, _tray!, _notifications!, _traffic!, _wifi!, mini, _startupError);
         MainWindow = window;
         window.Closed += (_, _) => Shutdown();
         window.Show();
+    }
+
+    private string? ApplyQuotaAction(Counter counter, QuotaAction action, long bytes)
+    {
+        if (_settings.SavedCounters?.Contains(counter) != true) return null;
+        if (action == QuotaAction.WifiOff)
+        {
+            var error = _wifi!.TurnOff(counter);
+            if (error is null) ReportWifi(TextCatalog.Format("WifiOff"));
+            return error;
+        }
+
+        if (action == QuotaAction.Extend)
+        {
+            if (counter.LimitBytes is not long limit) return TextCatalog.Format("InvalidLimit");
+            if (limit > long.MaxValue - bytes) return TextCatalog.Format("LimitOverflow");
+            if (limit + bytes <= counter.UsedBytes) return TextCatalog.Format("QuotaNeedsLargerExtension");
+        }
+
+        var restoring = _settings.WifiRecovery?.Counter == counter.Id;
+        if (restoring && _wifi!.Restore() is { } restoreError) return restoreError;
+
+        var original = (counter.LimitBytes, counter.LimitDelivered, counter.WarningDelivered, _settings.ArmedWifi);
+        if (action == QuotaAction.Extend)
+            counter.Extend(bytes);
+        else if (_settings.ArmedWifi?.Counter == counter.Id && counter.LimitBytes is long limit && counter.UsedBytes >= limit)
+            _settings.ArmedWifi = null;
+
+        try { _store.Save(_settings); }
+        catch (Exception ex) when (ex is System.IO.IOException or UnauthorizedAccessException)
+        {
+            (counter.LimitBytes, counter.LimitDelivered, counter.WarningDelivered, _settings.ArmedWifi) = original;
+            Debug.WriteLine(ex);
+            return TextCatalog.Format("SaveError");
+        }
+
+        if (restoring) ReportWifi(TextCatalog.Format("WifiRestored"));
+        if (MainWindow is MainWindow main) main.RefreshQuotaAfterAction(counter);
+        return null;
+    }
+
+    private void ReportWifi(string status)
+    {
+        _notifications?.RefreshWifi();
+        _tray?.Notify(status);
+        if (MainWindow is MainWindow main) main.ShowWifiStatus(status);
     }
 
     private void RestoreWifi()
@@ -126,6 +178,7 @@ public partial class App : Application
         _listener?.Unregister(null);
         _restore?.Dispose();
         _monitor?.Dispose();
+        _traffic?.Dispose();
         _notifications?.Dispose();
         _tray?.Dispose();
         if (_ownsInstance) _instance?.ReleaseMutex();

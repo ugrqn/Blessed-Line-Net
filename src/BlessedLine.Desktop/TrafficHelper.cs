@@ -27,8 +27,8 @@ internal sealed class TrafficHelper : IDisposable
             using var pipe = new NamedPipeServerStream($"BlessedLine-{id:N}", PipeDirection.In, 1,
                 PipeTransmissionMode.Byte, PipeOptions.Asynchronous | PipeOptions.FirstPipeInstance);
             var executable = Environment.ProcessPath ?? throw new InvalidOperationException();
-            using var process = Process.Start(new ProcessStartInfo(executable, $"--traffic {id:N} {Environment.ProcessId}")
-                { UseShellExecute = true, Verb = "runas" }) ?? throw new InvalidOperationException();
+            using var process = await Task.Run(() => Process.Start(new ProcessStartInfo(executable, $"--traffic {id:N} {Environment.ProcessId}")
+                { UseShellExecute = true, Verb = "runas" }), token).ConfigureAwait(false) ?? throw new InvalidOperationException();
             using var timeout = CancellationTokenSource.CreateLinkedTokenSource(token);
             timeout.CancelAfter(TimeSpan.FromSeconds(15));
             // Reject any peer other than the elevated instance that this UI just launched.
@@ -49,9 +49,11 @@ internal sealed class TrafficHelper : IDisposable
                     foreach (var sample in packet.Traffic)
                     {
                         var key = sample.Path ?? "";
-                        _pending[key] = _pending.TryGetValue(key, out var old)
-                            ? sample with { Received = old.Received + sample.Received, Sent = old.Sent + sample.Sent }
-                            : sample;
+                        if (_pending.Count >= ApplicationTraffic.MaxApplications && !_pending.ContainsKey(key))
+                            key = "";
+                        _pending.TryGetValue(key, out var old);
+                        _pending[key] = new AppTraffic(key.Length == 0 ? null : key,
+                            old.Received + sample.Received, old.Sent + sample.Sent);
                     }
                 }
             }
@@ -87,7 +89,7 @@ internal sealed class TrafficHelper : IDisposable
             using var writer = new StreamWriter(pipe) { AutoFlush = true };
             while (true)
             {
-                Thread.Sleep(700);
+                Thread.Sleep(1500);
                 var (status, batch) = capture.Drain();
                 writer.WriteLine(JsonSerializer.Serialize(new Packet(status, batch)));
                 if (capture.Failed) return;

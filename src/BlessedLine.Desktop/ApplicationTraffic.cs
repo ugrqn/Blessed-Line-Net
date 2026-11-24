@@ -7,11 +7,11 @@ using Microsoft.Diagnostics.Tracing.Session;
 
 namespace BlessedLine.Desktop;
 
-internal sealed record AppTraffic(string? Path, long Received, long Sent);
+internal readonly record struct AppTraffic(string? Path, long Received, long Sent);
 
 internal sealed class ApplicationTraffic : IDisposable
 {
-    private const int MaxApplications = 2048;
+    internal const int MaxApplications = 2048;
     private const string Unattributed = "<unknown>";
     private readonly object _gate = new();
     private readonly Dictionary<int, ProcessIdentity> _processes = new();
@@ -19,7 +19,8 @@ internal sealed class ApplicationTraffic : IDisposable
     private readonly Thread _worker;
     private TraceEventSession? _session;
     private bool _disposed;
-    public bool Failed { get; private set; }
+    private volatile bool _failed;
+    public bool Failed => _failed;
     private string _status = "MeasurementStarting";
 
     private sealed record ProcessIdentity(string? Path, DateTime StartedUtc, DateTime RetryAfterUtc = default);
@@ -49,7 +50,7 @@ internal sealed class ApplicationTraffic : IDisposable
         // A unique system logger avoids stopping or reusing another program's ETW session.
         try
         {
-            using var session = new TraceEventSession($"BlessedLine-{Guid.NewGuid():N}");
+            using var session = new TraceEventSession($"BlessedLine-{Guid.NewGuid():N}") { BufferSizeMB = 8 };
             session.EnableKernelProvider(KernelTraceEventParser.Keywords.NetworkTCPIP | KernelTraceEventParser.Keywords.Process);
             var parser = session.Source.Kernel;
             parser.ProcessStart += e => _processes.Remove(e.ProcessID);
@@ -87,7 +88,7 @@ internal sealed class ApplicationTraffic : IDisposable
         }
         catch (Exception ex)
         {
-            Failed = true;
+            _failed = true;
             Debug.WriteLine(ex);
             lock (_gate)
                 _status = "MeasurementFailed";
@@ -106,16 +107,13 @@ internal sealed class ApplicationTraffic : IDisposable
 
         lock (_gate)
         {
-            if (!_traffic.TryGetValue(key, out var sample))
+            if (_traffic.Count >= MaxApplications && !_traffic.ContainsKey(key))
             {
-                if (_traffic.Count >= MaxApplications)
-                {
-                    key = Unattributed;
-                    path = null;
-                    _traffic.TryGetValue(key, out sample);
-                }
-                sample ??= new AppTraffic(path, 0, 0);
+                key = Unattributed;
+                path = null;
             }
+            if (!_traffic.TryGetValue(key, out var sample))
+                sample = new AppTraffic(path, 0, 0);
 
             _traffic[key] = upload
                 ? sample with { Sent = sample.Sent + bytes }

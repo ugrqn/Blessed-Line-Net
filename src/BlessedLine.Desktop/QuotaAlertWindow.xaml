@@ -1,0 +1,30 @@
+<Window x:Class="BlessedLine.Desktop.QuotaAlertWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        Title="BlessedLine" Icon="Assets/BlessedLine.ico" Width="390" SizeToContent="Height"
+        WindowStyle="ToolWindow" ResizeMode="NoResize" WindowStartupLocation="CenterScreen"
+        Topmost="True" ShowInTaskbar="False" UseLayoutRounding="True">
+    <Border Padding="18" Background="{DynamicResource Base}">
+        <StackPanel>
+            <TextBlock x:Name="Heading" FontSize="18" FontWeight="SemiBold" TextWrapping="Wrap"
+                       Foreground="{DynamicResource Ink}"/>
+            <TextBlock x:Name="Remaining" Margin="0,7,0,12" TextWrapping="Wrap"
+                       Foreground="{DynamicResource Muted}"/>
+            <WrapPanel Orientation="Horizontal">
+                <Button x:Name="ContinueButton" Click="Continue" Content="{DynamicResource L_KeepUsing}"
+                        Margin="0,0,8,6" Padding="11,4"/>
+                <Button x:Name="WifiOffButton" Click="WifiOff" Content="{DynamicResource L_TurnWifiOff}"
+                        Margin="0,0,0,6" Padding="11,4"/>
+            </WrapPanel>
+            <Expander x:Name="ExtensionMenu" Header="{DynamicResource L_AddQuota}" Margin="0,3,0,0">
+                <UniformGrid Columns="2" Margin="0,5,0,0">
+                    <Button x:Name="Add100Button" Content="+100 MB" Tag="100" Click="Extend" Margin="0,0,4,4"/>
+                    <Button x:Name="Add200Button" Content="+200 MB" Tag="200" Click="Extend" Margin="0,0,0,4"/>
+                    <Button x:Name="Add500Button" Content="+500 MB" Tag="500" Click="Extend" Margin="0,0,4,0"/>
+                    <Button x:Name="Add1000Button" Content="+1000 MB" Tag="1000" Click="Extend"/>
+                </UniformGrid>
+            </Expander>
+            <TextBlock x:Name="Error" TextWrapping="Wrap" Foreground="#A63325"/>
+        </StackPanel>
+    </Border>
+</Window>

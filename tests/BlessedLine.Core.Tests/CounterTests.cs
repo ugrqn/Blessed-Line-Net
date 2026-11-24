@@ -42,6 +42,31 @@ public class CounterTests
     }
 
     [Fact]
+    public void EditableWarningCanBeReevaluatedWithoutNewTraffic()
+    {
+        var counter = new Counter { LimitBytes = 1_000_000_000 };
+        Assert.Equal(100_000_000, counter.WarningBeforeBytes);
+        Assert.Null(counter.Add(850_000_000, 0));
+        counter.WarningBeforeBytes = 150_000_000;
+        Assert.Equal(CounterEvent.Warning, counter.EvaluateThreshold());
+        Assert.Null(counter.EvaluateThreshold());
+        Assert.Equal(CounterEvent.Limit, counter.Add(150_000_000, 0));
+    }
+
+    [Fact]
+    public void DisabledWarningStillReportsLimitAndExtensionRearmsIt()
+    {
+        var counter = new Counter { LimitBytes = 500_000_000, WarningBeforeBytes = 0 };
+        Assert.Null(counter.Add(499_999_999, 0));
+        Assert.Equal(CounterEvent.Limit, counter.Add(1, 0));
+        counter.Extend(200_000_000);
+        Assert.Null(counter.EvaluateThreshold());
+        Assert.Equal(CounterEvent.Limit, counter.Add(200_000_000, 0));
+        Assert.Equal(0, Units.ParseMegabytes("0,0", allowZero: true));
+        Assert.Throws<FormatException>(() => Units.ParseMegabytes("0,0"));
+    }
+
+    [Fact]
     public void TurkishDecimalInputUsesMegabytes()
     {
         Assert.Equal(1_500_000, Units.ParseMegabytes("1,5"));

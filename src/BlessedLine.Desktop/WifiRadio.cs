@@ -4,11 +4,12 @@ using Microsoft.Win32.SafeHandles;
 
 namespace BlessedLine.Desktop;
 
-internal sealed record WifiRecovery(Guid Adapter, Guid Counter, uint[] EnabledPhys);
+internal sealed record WifiRecovery(Guid Adapter, Guid Counter, uint[] EnabledPhys, string? Profile = null);
 
 internal sealed class WifiRadio : SafeHandleZeroOrMinusOneIsInvalid
 {
     private const uint RadioState = 4; // wlan_intf_opcode_radio_state
+    private const uint CurrentConnection = 7; // wlan_intf_opcode_current_connection
     private const int On = 1;
     private const int Off = 2;
 
@@ -51,6 +52,33 @@ internal sealed class WifiRadio : SafeHandleZeroOrMinusOneIsInvalid
         }
     }
 
+    internal string? ConnectedProfile(Guid adapter)
+    {
+        if (WlanQueryInterface(this, in adapter, CurrentConnection, 0, out var size, out var data, out _) != 0)
+            return null;
+        try
+        {
+            if (size < 520 || Marshal.ReadInt32(data) != 1) return null; // wlan_interface_state_connected
+            return Marshal.PtrToStringUni(data + 8, 256)?.Split('\0', 2)[0];
+        }
+        finally { WlanFreeMemory(data); }
+    }
+
+    internal void Connect(Guid adapter, string profile)
+    {
+        var parameters = new ConnectionParameters { Profile = profile, BssType = 3 };
+        Check(WlanConnect(this, in adapter, in parameters, 0));
+    }
+
+    [StructLayout(LayoutKind.Sequential, CharSet = CharSet.Unicode)]
+    private struct ConnectionParameters
+    {
+        internal uint Mode; // wlan_connection_mode_profile
+        [MarshalAs(UnmanagedType.LPWStr)] internal string Profile;
+        internal nint Ssid, BssidList;
+        internal uint BssType, Flags;
+    }
+
     protected override bool ReleaseHandle() => WlanCloseHandle(handle, 0) == 0;
 
     private static void Check(uint error)
@@ -78,6 +106,9 @@ internal sealed class WifiRadio : SafeHandleZeroOrMinusOneIsInvalid
     [DllImport("wlanapi.dll")]
     private static extern uint WlanSetInterface(WifiRadio client, in Guid adapter, uint opcode,
         uint size, in PhyState state, nint reserved);
+
+    [DllImport("wlanapi.dll")]
+    private static extern uint WlanConnect(WifiRadio client, in Guid adapter, in ConnectionParameters parameters, nint reserved);
 
     [DllImport("wlanapi.dll")]
     private static extern void WlanFreeMemory(nint data);

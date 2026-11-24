@@ -4,7 +4,7 @@ using System.Windows.Threading;
 
 namespace BlessedLine.Desktop;
 
-// Keeps aggregate counters running during sign-in without creating window controls or an ETW session.
+// Keeps aggregate counters running without creating the main window.
 internal sealed class TrayMonitor : IDisposable
 {
     internal static readonly TimeSpan Interval = TimeSpan.FromSeconds(3);
@@ -14,16 +14,18 @@ internal sealed class TrayMonitor : IDisposable
     private readonly AdapterMeter _meter;
     private readonly TrayMenu _tray;
     private readonly QuotaNotifications _notifications;
+    private readonly WifiControl _wifi;
     private bool _dirty;
     private int _ticks;
 
-    internal TrayMonitor(WindowStateData settings, SettingsStore store, AdapterMeter meter, TrayMenu tray, QuotaNotifications notifications)
+    internal TrayMonitor(WindowStateData settings, SettingsStore store, AdapterMeter meter, TrayMenu tray, QuotaNotifications notifications, WifiControl wifi)
     {
         _settings = settings;
         _store = store;
         _meter = meter;
         _tray = tray;
         _notifications = notifications;
+        _wifi = wifi;
         _timer.Tick += Sample;
         Sample(this, EventArgs.Empty);
         _timer.Start();
@@ -40,7 +42,7 @@ internal sealed class TrayMonitor : IDisposable
             }
 
             if (++_ticks % 3 == 0 || _meter.Selected is null)
-                _meter.Select(AdapterMeter.Preferred(AdapterChoice.Connected(), _settings.AdapterId, pin: false));
+                _meter.Select(AdapterMeter.Preferred(AdapterChoice.Connected(), _settings.AdapterId, pin: _settings.ArmedWifi is not null));
 
             if (_meter.Read() is not { } sample) return;
             var changed = sample.Received > 0 || sample.Sent > 0;
@@ -63,6 +65,7 @@ internal sealed class TrayMonitor : IDisposable
 
             _dirty |= changed || notify;
             if (notify || _ticks % 2 == 0) Flush();
+            _wifi.CheckLimit(_settings.SavedCounters!);
         }
         catch (Exception ex) when (ex is NetworkInformationException or OverflowException)
         {
