@@ -132,6 +132,22 @@ jobs:
               if ($saved.Theme -ne 'Win7') { throw 'Theme change did not persist.' }
               if ($p.HasExited) { throw 'The theme switch closed the app.' }
               Write-Host 'Aero was selected and saved.'
+              Add-Type -AssemblyName System.Drawing.Common
+              $corner = [System.Drawing.Bitmap]::new(1, 1)
+              $graphics = [System.Drawing.Graphics]::FromImage($corner)
+              try {
+                  $frame = $window.Current.BoundingRectangle
+                  $graphics.CopyFromScreen([int]$frame.Left + 3, [int]$frame.Top + 3, 0, 0, $corner.Size)
+                  $pixel = $corner.GetPixel(0, 0)
+                  if ($pixel.R -ge 215 -or $pixel.B -le $pixel.R) {
+                      throw "The upper-left Aero caption still shows a blank corner. Pixel=$pixel"
+                  }
+                  Write-Host "Upper-left Aero pixel is covered by the caption: $pixel"
+              } finally {
+                  $graphics.Dispose()
+                  $corner.Dispose()
+              }
+
               $startup = $e::RootElement.FindFirst([System.Windows.Automation.TreeScope]::Descendants, [System.Windows.Automation.PropertyCondition]::new($e::AutomationIdProperty,'StartupCheck'))
               $toggle = $startup.GetCurrentPattern([System.Windows.Automation.TogglePattern]::Pattern)
               $toggle.Toggle()

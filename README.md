@@ -2,13 +2,13 @@
 
 BlessedLine, Windows ve Linux için internet kullanımı ve kota sayacıdır. Ana pencere seçili bağlantının hızını ve kotasını, altındaki tablo ise ağ kullanan uygulamaları gösterir.
 
-[English](docs/README.en.md) · [Sürüm notları](https://github.com/ugrqn/Blessed-Line-Net/releases/tag/v0.4.1-preview) · [11 dilli indirme kartları (ZIP)](https://github.com/ugrqn/Blessed-Line-Net/releases/download/v0.4.1-preview/BlessedLine-0.4.1-downloads.zip)
+[English](docs/README.en.md) · [Sürüm notları](https://github.com/ugrqn/Blessed-Line-Net/releases/tag/v0.5.0-preview) · [11 dilli indirme kartları (ZIP)](https://github.com/ugrqn/Blessed-Line-Net/releases/download/v0.5.0-preview/BlessedLine-0.5.0-downloads.zip)
 
 ## İndir
 
 | Windows 64 bit | Windows 32 bit | Linux |
 | :--- | :--- | :--- |
-| **[İndir · x64 .7z](https://github.com/ugrqn/Blessed-Line-Net/releases/download/v0.4.1-preview/BlessedLine-0.4.1-win-x64.7z)** | **[İndir · x86 .7z](https://github.com/ugrqn/Blessed-Line-Net/releases/download/v0.4.1-preview/BlessedLine-0.4.1-win-x86.7z)** | **[İndir · .tar.gz](https://github.com/ugrqn/Blessed-Line-Net/releases/download/v0.4.0-preview/BlessedLine-0.4.0-linux.tar.gz)** |
+| **[İndir · x64 .7z](https://github.com/ugrqn/Blessed-Line-Net/releases/download/v0.5.0-preview/BlessedLine-0.5.0-win-x64.7z)** | **[İndir · x86 .7z](https://github.com/ugrqn/Blessed-Line-Net/releases/download/v0.5.0-preview/BlessedLine-0.5.0-win-x86.7z)** | **[İndir · .tar.gz](https://github.com/ugrqn/Blessed-Line-Net/releases/download/v0.4.0-preview/BlessedLine-0.4.0-linux.tar.gz)** |
 | Windows 11 / 64 bit Windows 10 | 32 bit Windows 10 | Debian ve Ubuntu önizlemesi |
 
 Windows’ta eski sürüm açıksa bildirim alanındaki simgeden **Çıkış**’ı seç. Yeni arşivi ayıkla ve `BlessedLine.exe` dosyasını aç. İlk açılışta **Windows ile başlat** seçeneği etkindir. Oturum açıldığında sayaç tepside çalışır. Ana pencereyi tepsi simgesinden açabilir, otomatik başlatmayı **Ayarlar** bölümünden kapatabilirsin. Linux paketinde Python 3 ve Tk gerekir. [Linux kullanım bilgileri](src/BlessedLine.Linux/README.md)
@@ -16,9 +16,11 @@ Windows’ta eski sürüm açıksa bildirim alanındaki simgeden **Çıkış**�
 ## Uygulamalar ve sayaçlar
 
 - **Uygulamalar** açıkken etkin TCP bağlantısı olan programlar otomatik listelenir. Bir programı görmek için o programda bir sayfa aç veya indirme başlat. Windows’un verdiği dosya ya da uygulama paketi simgesi, kısa adın yanında görünür. Simge okunamıyorsa Windows’un genel uygulama simgesi kullanılır.
-- **Hızları ölç…** düğmesine basıp Windows’un yönetici iznini onayla. Ana pencere açık kalır. Tabloda her uygulamanın indirme ve yükleme hızını ve ölçüm başladığından beri iki yöndeki toplamını görebilirsin. Çizgi (—) henüz ölçüm alınmadığını gösterir. Yönetici olarak başlatılan oturumlarda ölçüm kendiliğinden açılır.
+- Uygulama ölçümü başlangıçta otomatik açılır. Windows yönetici onayı isterse açılan sistem ekranında onayla. **Ayarlar → Ölçümü otomatik başlat** seçeneği ölçümü durdurur ve sonraki oturumların başlangıç tercihini kaydeder. Tabloda her uygulamanın indirme ve yükleme hızını ve ölçüm başladığından beri iki yöndeki toplamını görebilirsin. Çizgi (—) henüz ölçüm alınmadığını gösterir. Yönetici olarak başlatılan oturumlarda ölçüm kendiliğinden açılır.
 - Üstteki kota **seçili bağlantıya**, uygulama tablosu Windows’un süreçlere bağlayabildiği **tüm bağlantılardaki TCP ve UDP trafiğine** dayanır. Kaynağı belirlenemeyen trafik “Atfedilemeyen” adıyla gösterilir.
-- **Kota ekle…** veya **Kotayı düzenle…** içinden sayacı seç, limiti MB olarak gir ve **Uygula**’ya bas. Çubuk kullanımla dolar ve kota dolunca kırmızı olur. %90’da ve limitte bildirim verilir. **Kota dolunca Wi-Fi’yi kapat** seçeneğini aç, Windows yönetici iznini ve uygulamadaki onayı ver. Seçili Wi-Fi radyosu kota dolunca kapanır. Kota zaten aşılmışsa kapatma hemen çalışır. **Wi-Fi’yi geri aç** ile radyoyu yeniden açabilirsin. Otomatik kapatmayı her yeni oturumda yeniden seç.
+- **Kotayı düzenle…** bölümünde kota ile **Uyarı payı (MB)** birlikte kaydedilir. Yeni sayaçların uyarı payı 100 MB’dir. Mevcut sayaçların kaydedilmiş değeri korunur. Erken uyarıyı kapatmak için payı 0 yapabilirsin.
+- Uyarı ve kota doldu pencereleri önde açılır. **Kullanmaya devam et**, **Kota ekle** menüsündeki +100, +200, +500 ve +1000 MB seçeneklerinden biri ya da **Wi-Fi’yi kapat** ile işlem yapabilirsin. Pencere açıkken sayaç çalışır.
+- **Kota dolunca Wi-Fi’yi kapat** seçeneği kayıtlıysa cihaz yetkileri izin verdiğinde kota dolunca seçili Wi-Fi radyosu kapanır. Kota dolduktan sonra devam etmek veya yeterli kota eklemek radyoyu açar. Windows eski ağ profilini okumaya izin verdiyse BlessedLine aynı profile bağlanmayı dener.
 - **Ayarlar…** içinde **XP Klasik** veya **Windows 7 Aero** görünümünü seçebilirsin. Pencere çerçevesi, yazı tipi ve denetimler temayla birlikte değişir. Ana pencere ve küçük çubuk için uygulama listesini ayrı ayrı açabilirsin. Dili Türkçe ve on ek dil arasından seçebilir, üç uyarı sesini dinleyebilirsin.
 
 ## Küçük çubuk ve bildirim alanı

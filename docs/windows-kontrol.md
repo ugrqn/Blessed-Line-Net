@@ -1,4 +1,4 @@
-# BlessedLine 0.4.0 Windows kontrolleri
+# BlessedLine Windows kontrolleri
 
 Genel komutlar ve paket bilgileri README’de. Aşağıdaki maddeler Windows 11 x64 üzerinde elle uygulanabilir.
 
@@ -12,3 +12,5 @@ Genel komutlar ve paket bilgileri README’de. Aşağıdaki maddeler Windows 11 
 7. Başlıktaki – düğmesiyle ekranın sağ üstüne in. Kalan kota ile indirme ve yükleme hızlarını kontrol et. Küçük kotayı doldurarak yeşil çubuğun kırmızı olduğunu doğrula. × ile gizleyip tepsi bildirimini kontrol et. Simgeye çift tıkla veya EXE’yi tekrar aç ve aynı oturuma dön.
 
 8. Ayarlar’dan İngilizceye ve Arapçaya geç. Küçük çubukta dişli simgesinden kotayı değiştir. Nokta veya virgülü seçili dilin biçimine uygun kullanıp değerin kaydedildiğini ve dilin yeniden açılışta korunduğunu doğrula.
+
+9. Kota uyarı payını 150 MB yap. Kalan veri 150 MB’ye geldiğinde başka bir pencere açıkken uyarının üstte olduğunu kontrol et. +200 MB seçip aynı sayacın limitinin değiştiğini doğrula. İkinci denemede uyarıya dokunmadan kota dolmasını bekle. Kota doldu penceresinde devam et seçeneğiyle Windows’un önceki kayıtlı ağa dönmeye çalıştığını kontrol et.
