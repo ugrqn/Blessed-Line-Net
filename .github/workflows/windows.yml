@@ -8,7 +8,11 @@ permissions:
 jobs:
   windows:
     runs-on: windows-2025
-    timeout-minutes: 12
+    timeout-minutes: 14
+    strategy:
+      fail-fast: false
+      matrix:
+        arch: ${{ fromJSON(startsWith(github.ref, 'refs/tags/v') && '["x64","x86"]' || '["x64"]') }}
     env:
       BLESSED_EXE: ./src/BlessedLine.Desktop/bin/Release/net10.0-windows/BlessedLine.exe
     steps:
@@ -36,7 +40,7 @@ jobs:
         shell: pwsh
         run: |
           $version = $env:GITHUB_REF_NAME -replace '^v','' -replace '-preview$',''
-          $archive = "release-files/BlessedLine-$version-win-x64.7z"
+          $archive = "release-files/BlessedLine-$version-win-${{ matrix.arch }}.7z"
           Get-FileHash $archive -Algorithm SHA256
           & 7z x $archive -oportable
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
@@ -251,4 +255,34 @@ jobs:
           } finally {
               $pipe.Dispose()
               if ($worker -and !$worker.WaitForExit(5000)) { $worker.Kill(); throw 'Helper did not exit on pipe close.' }
+          }
+      - name: Open the app in all supported languages
+        if: ${{ !cancelled() }}
+        shell: pwsh
+        run: |
+          Add-Type -AssemblyName UIAutomationClient, UIAutomationTypes
+          $ui = [System.Windows.Automation.AutomationElement]
+          $scope = [System.Windows.Automation.TreeScope]::Descendants
+          $profilePath = Join-Path $env:LOCALAPPDATA 'BlessedLine/state.json'
+          $country = Import-Csv src/BlessedLine.Desktop/Languages.tsv -Delimiter "`t" | Where-Object key -eq Settings
+          foreach ($language in @('tr','en','zh','hi','es','ar','fr','bn','pt','ru','ur')) {
+              @{ Language = $language } | ConvertTo-Json | Set-Content $profilePath
+              $app = Start-Process -FilePath $env:BLESSED_EXE -PassThru
+              try {
+                  for ($i = 0; $i -lt 30; $i++) {
+                      Start-Sleep -Milliseconds 300
+                      $app.Refresh()
+                      if ($app.HasExited) { throw "Failed to launch locale $language." }
+                      if ($app.MainWindowHandle -ne 0) { break }
+                  }
+                  if ($app.MainWindowHandle -eq 0) { throw "No window for locale $language." }
+                  $window = $ui::FromHandle($app.MainWindowHandle)
+                  $settings = $window.FindFirst($scope, [System.Windows.Automation.PropertyCondition]::new($ui::AutomationIdProperty, 'SettingsButton'))
+                  if ($settings.Current.Name -ne $country.$language) {
+                      throw "Locale ${language}: expected '$($country.$language)', got '$($settings.Current.Name)'."
+                  }
+                  Write-Host "$language window: $($settings.Current.Name)"
+              } finally {
+                  if (!$app.HasExited) { $app.Kill(); $app.WaitForExit() }
+              }
           }

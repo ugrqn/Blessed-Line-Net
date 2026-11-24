@@ -8,3 +8,6 @@ artifacts/
 .vs/
 *.user
 *.suo
+
+# Python çalışma çıktıları
+__pycache__/

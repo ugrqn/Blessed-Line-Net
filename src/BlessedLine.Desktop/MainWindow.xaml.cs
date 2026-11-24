@@ -15,6 +15,7 @@ namespace BlessedLine.Desktop;
 public partial class MainWindow : Window
 {
     private static readonly string[] SoundNames = ["normal", "soft", "strong"];
+    private const long QuotaStep = 100_000_000;
     private const string UnknownApplication = "<unknown>";
     private readonly DispatcherTimer _timer = new() { Interval = TimeSpan.FromSeconds(1) };
     private readonly Stopwatch _clock = Stopwatch.StartNew();
@@ -113,11 +114,12 @@ public partial class MainWindow : Window
             var selected = list.FirstOrDefault(item => item.Id == _adapter?.Id)
                 ?? list.FirstOrDefault(item => item.Id == _settings.AdapterId)
                 ?? list.FirstOrDefault();
-            if (_settings.WifiRecovery is not null && selected?.Id != _settings.AdapterId)
-                selected = null;
+            if (_settings.WifiRecovery is not null || _wifiQuota is not null)
+                selected = list.FirstOrDefault(item => item.Id == _settings.AdapterId);
 
             var current = Adapters.ItemsSource as IReadOnlyList<AdapterChoice>;
-            if (current is null || !current.Select(item => (item.Id, item.Label)).SequenceEqual(list.Select(item => (item.Id, item.Label))))
+            if (current is null || !current.Select(item => (item.Id, item.Label)).SequenceEqual(list.Select(item => (item.Id, item.Label))) ||
+                ((AdapterChoice?)Adapters.SelectedItem)?.Id != selected?.Id)
             {
                 _refreshing = true;
                 try
@@ -148,13 +150,13 @@ public partial class MainWindow : Window
     {
         if (!_ready || _refreshing)
             return;
+        ClearArming();
         ChangeAdapter(Adapters.SelectedItem as AdapterChoice);
         Save();
     }
 
     private void ChangeAdapter(AdapterChoice? adapter)
     {
-        ClearArming();
         _adapter = adapter;
         _previous = null;
         _settings.AdapterId = adapter?.Id ?? _settings.AdapterId;
@@ -329,6 +331,7 @@ public partial class MainWindow : Window
             QuotaHint.Text += counter.Direction == TrafficDirection.Download ? T("DownloadSuffix") : T("UploadSuffix");
         PauseButton.Content = counter.State == CounterState.Paused ? T("Resume") : T("Pause");
         ExtendButton.IsEnabled = counter.LimitBytes.HasValue;
+        LowerButton.IsEnabled = counter.LimitBytes > QuotaStep;
         TrackFill.Background = _quotaFraction >= 1 ? FullBrush : AvailableBrush;
         QuotaPercent.Foreground = _quotaFraction >= 1 ? FullBrush : (Brush)FindResource("Accent");
         EditQuotaButton.Content = counter.LimitBytes.HasValue ? T("EditQuotaEllipsis") : "Kota ekle…";
@@ -444,13 +447,26 @@ public partial class MainWindow : Window
         try
         {
             var currentLimit = Current.LimitBytes!.Value;
-            var extended = checked(currentLimit + 100_000_000);
+            var extended = checked(currentLimit + QuotaStep);
             if (Current.UsedBytes < extended && _settings.WifiRecovery?.Counter == Current.Id && !RestoreWifi()) return;
-            Current.Extend(100_000_000);
+            Current.Extend(QuotaStep);
             SetCounterFields();
             Save();
         }
         catch (OverflowException) { Feedback.Text = T("LimitOverflow"); }
+    }
+
+    private void LowerLimit(object sender, RoutedEventArgs e)
+    {
+        if (Current.LimitBytes is not long limit || limit <= QuotaStep) return;
+        Current.LimitBytes = limit - QuotaStep;
+        Current.WarningBeforeBytes = Current.LimitBytes.Value / 10;
+        Current.LimitDelivered = false;
+        Current.WarningDelivered = false;
+        SetCounterFields();
+        Save();
+        CheckWifiQuota();
+        UpdateQuota();
     }
 
     private void ArmBlock(object sender, RoutedEventArgs e)

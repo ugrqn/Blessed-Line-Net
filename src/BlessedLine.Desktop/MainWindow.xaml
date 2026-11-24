@@ -90,9 +90,13 @@
                             <DockPanel><Button Content="{DynamicResource L_New}" DockPanel.Dock="Right" Click="NewCounter" Margin="4,0,0,0"/>
                                 <ComboBox x:Name="Counters" DisplayMemberPath="Name" SelectionChanged="CounterChanged" AutomationProperties.Name="{DynamicResource L_Counter}"/></DockPanel>
                             <TextBlock Text="{DynamicResource L_LimitMb}" Margin="0,8,0,3"/>
-                            <DockPanel><Button x:Name="ExtendButton" Content="+100 MB" DockPanel.Dock="Right" Click="ExtendLimit" Margin="4,0,0,0"/>
+                            <DockPanel>
                                 <Button x:Name="ApplyLimitButton" Content="{DynamicResource L_Apply}" DockPanel.Dock="Right" Click="SetLimit" Margin="4,0,0,0"/>
                                 <TextBox x:Name="LimitInput" VerticalContentAlignment="Center" MaxLength="16" AutomationProperties.Name="{DynamicResource L_LimitMb}"/></DockPanel>
+                            <WrapPanel Margin="0,5,0,0">
+                                <Button x:Name="LowerButton" Content="−100 MB" Click="LowerLimit"/>
+                                <Button x:Name="ExtendButton" Content="+100 MB" Click="ExtendLimit" Margin="4,0,0,0"/>
+                            </WrapPanel>
                             <CheckBox x:Name="BlockCheck" Content="{DynamicResource L_WifiAtQuota}" Checked="ArmBlock" Unchecked="DisarmBlock" Margin="0,8"/>
                             <WrapPanel><Button x:Name="PauseButton" Click="PauseCounter"/><Button Content="{DynamicResource L_Reset}" Margin="4,0" Click="ResetCounter"/><Button Content="{DynamicResource L_Delete}" Click="DeleteCounter"/></WrapPanel>
                         </StackPanel>
