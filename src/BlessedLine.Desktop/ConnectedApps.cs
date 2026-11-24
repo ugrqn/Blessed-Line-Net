@@ -1,5 +1,5 @@
 using System.ComponentModel;
-using System.Diagnostics;
+using Microsoft.Win32.SafeHandles;
 using System.Net;
 using System.Runtime.InteropServices;
 using System.Text;
@@ -20,12 +20,16 @@ internal static class ConnectedApps
         {
             try
             {
-                using var process = Process.GetProcessById(pid);
-                var path = process.MainModule?.FileName;
-                if (path is null || apps.ContainsKey(path)) continue;
+                using var process = OpenProcess(0x1000, false, pid); // PROCESS_QUERY_LIMITED_INFORMATION
+                if (process.IsInvalid) continue;
+                var image = new StringBuilder(32768);
+                int size = image.Capacity;
+                if (!QueryFullProcessImageName(process, 0, image, ref size)) continue;
+                var path = image.ToString();
+                if (apps.ContainsKey(path)) continue;
                 var id = new StringBuilder(130);
                 uint length = (uint)id.Capacity;
-                var packaged = GetApplicationUserModelId(process.SafeHandle, ref length, id) == 0;
+                var packaged = GetApplicationUserModelId(process, ref length, id) == 0;
                 apps.Add(path, new(path, packaged ? id.ToString() : null));
             }
             catch (Exception ex) when (ex is ArgumentException or InvalidOperationException or Win32Exception)
@@ -67,6 +71,11 @@ internal static class ConnectedApps
         }
         if (result != 0 && result != 50) throw new Win32Exception((int)result);
     }
+
+    [DllImport("kernel32.dll", SetLastError = true)]
+    private static extern SafeProcessHandle OpenProcess(uint access, bool inherit, int pid);
+    [DllImport("kernel32.dll", CharSet = CharSet.Unicode, SetLastError = true)]
+    private static extern bool QueryFullProcessImageName(SafeProcessHandle process, uint flags, StringBuilder path, ref int length);
 
     [DllImport("iphlpapi.dll")]
     private static extern uint GetExtendedTcpTable(nint table, ref int size, bool sort, int family, int tableClass, int reserved);

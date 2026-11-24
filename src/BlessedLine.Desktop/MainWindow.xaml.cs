@@ -601,8 +601,10 @@ public partial class MainWindow : Window
         AuthorizeButton.Visibility = _details && canStart ? Visibility.Visible : Visibility.Collapsed;
         DetailStatus.Text = _details ? (_discoveryStatus.Length > 0 ? _discoveryStatus : _measureStatus) : "";
         EmptyApps.Visibility = _details && _rows.Count == 0 ? Visibility.Visible : Visibility.Collapsed;
-        EmptyApps.Text = "Ağ bağlantısı bekleniyor. Bir uygulamada sayfa açın.";
+        EmptyApps.Text = "Etkin ağ bağlantısı bekleniyor…";
     }
+
+    internal void RestoreMainPanel() => ShowPanel(false);
 
     private void ToggleMini(object sender, RoutedEventArgs e) => ShowPanel(!_mini);
 
@@ -628,7 +630,11 @@ public partial class MainWindow : Window
 
     private void ApplyLayout()
     {
-        var work = SystemParameters.WorkArea;
+        var screen = System.Windows.Forms.Screen.FromHandle(new System.Windows.Interop.WindowInteropHelper(this).Handle);
+        var source = PresentationSource.FromVisual(this);
+        var fromPixels = source?.CompositionTarget?.TransformFromDevice ?? Matrix.Identity;
+        var area = screen.WorkingArea;
+        var work = new Rect(fromPixels.Transform(new Point(area.Left, area.Top)), fromPixels.Transform(new Point(area.Right, area.Bottom)));
         Topmost = _mini;
         ShowInTaskbar = !_mini;
         var mainSize = Math.Min(550, Math.Min(work.Width, work.Height) - 12);

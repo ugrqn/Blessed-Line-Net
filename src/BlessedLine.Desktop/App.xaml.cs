@@ -6,12 +6,13 @@ public partial class App : Application
 {
     private Mutex? _instance;
     private bool _ownsInstance;
+    private EventWaitHandle? _restore;
+    private RegisteredWaitHandle? _listener;
 
     protected override void OnStartup(StartupEventArgs e)
     {
         if (e.Args is ["--traffic", var pipe, var owner] && Guid.TryParseExact(pipe, "N", out var id) && int.TryParse(owner, out var parent))
         {
-            StartupUri = null;
             TrafficHelper.Run(id, parent);
             Shutdown();
             return;
@@ -26,16 +27,27 @@ public partial class App : Application
 
         if (!_ownsInstance)
         {
-            MessageBox.Show("BlessedLine zaten açık.", "BlessedLine");
+            if (EventWaitHandle.TryOpenExisting(@"Local\BlessedLine.Restore", out var signal))
+            {
+                using (signal) signal.Set();
+            }
             Shutdown();
             return;
         }
 
         base.OnStartup(e);
+        var window = new MainWindow();
+        MainWindow = window;
+        window.Show();
+        _restore = new EventWaitHandle(false, EventResetMode.AutoReset, @"Local\BlessedLine.Restore");
+        _listener = ThreadPool.RegisterWaitForSingleObject(_restore, (_, _) =>
+            Dispatcher.BeginInvoke(window.RestoreMainPanel), null, Timeout.Infinite, false);
     }
 
     protected override void OnExit(ExitEventArgs e)
     {
+        _listener?.Unregister(null);
+        _restore?.Dispose();
         if (_ownsInstance) _instance?.ReleaseMutex();
         _instance?.Dispose();
         base.OnExit(e);

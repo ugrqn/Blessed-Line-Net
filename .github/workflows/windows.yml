@@ -55,6 +55,23 @@ jobs:
               $p.Refresh()
               if ($p.HasExited -or $p.MainWindowHandle -ne 0) { throw 'Close did not hide the running application.' }
               Write-Host 'X hid the window and kept the sampler running.'
+              $second = Start-Process -FilePath $p.Path -PassThru
+              if (-not $second.WaitForExit(10000)) { throw 'Duplicate instance did not hand off.' }
+              Start-Sleep -Seconds 1
+              $p.Refresh()
+              if ($p.MainWindowHandle -eq 0) { throw 'Launching again did not restore the tray window.' }
+              $window = $e::FromHandle($p.MainWindowHandle)
+              $settings = $window.FindFirst([System.Windows.Automation.TreeScope]::Descendants, [System.Windows.Automation.PropertyCondition]::new($e::AutomationIdProperty, 'SettingsButton'))
+              $settings.GetCurrentPattern($invoke).Invoke()
+              Start-Sleep -Milliseconds 500
+              $theme = $e::RootElement.FindFirst([System.Windows.Automation.TreeScope]::Descendants, [System.Windows.Automation.PropertyCondition]::new($e::AutomationIdProperty, 'ThemeList'))
+              $theme.GetCurrentPattern([System.Windows.Automation.ExpandCollapsePattern]::Pattern).Expand()
+              $aero = $e::RootElement.FindFirst([System.Windows.Automation.TreeScope]::Descendants, [System.Windows.Automation.PropertyCondition]::new($e::NameProperty,'Windows 7 Aero'))
+              $aero.GetCurrentPattern([System.Windows.Automation.SelectionItemPattern]::Pattern).Select()
+              Start-Sleep -Milliseconds 600
+              $saved = Get-Content (Join-Path $env:LOCALAPPDATA 'BlessedLine/state.json') -Raw | ConvertFrom-Json
+              if ($saved.Theme -ne 'Win7') { throw 'Theme change did not persist.' }
+              Write-Host 'Aero was selected and saved.'
 
           } finally {
               if (-not $p.HasExited) {
@@ -141,4 +158,52 @@ jobs:
                   $null = $p.CloseMainWindow()
                   if (-not $p.WaitForExit(5000)) { $p.Kill() }
               }
+          }
+      - name: Verify standard-user discovery and the ETW helper channel
+        shell: pwsh
+        run: |
+          $exe = (Resolve-Path './src/BlessedLine.Desktop/bin/Release/net10.0-windows/BlessedLine.exe').Path
+          $uri = 'https://raw.githubusercontent.com/microsoft/win32metadata/main/generation/WinSDK/RecompiledIdlHeaders/um/fwpmu.h'
+          Add-Type -AssemblyName UIAutomationClient, UIAutomationTypes
+          $element = [System.Windows.Automation.AutomationElement]
+          $scope = [System.Windows.Automation.TreeScope]::Descendants
+          $curl = Start-Process curl.exe -ArgumentList @('--silent','--fail','--limit-rate','2k','--max-time','60','--output','blessed-standard.tmp',$uri) -PassThru
+          try {
+              & runas.exe /trustlevel:0x20000 "$exe"
+              if ($LASTEXITCODE -ne 0) { throw 'Unable to launch with a basic user token.' }
+              for ($i=0; $i -lt 25; $i++) {
+                  Start-Sleep -Seconds 1
+                  $p = Get-Process BlessedLine -ErrorAction SilentlyContinue | Where-Object MainWindowHandle -ne 0 | Select-Object -First 1
+                  if (!$p) { continue }
+                  $window = $element::FromHandle($p.MainWindowHandle)
+                  $authorize = $window.FindFirst($scope,[System.Windows.Automation.PropertyCondition]::new($element::AutomationIdProperty,'AuthorizeButton'))
+                  $app = $window.FindFirst($scope,[System.Windows.Automation.PropertyCondition]::new($element::NameProperty,'curl'))
+                  if ($authorize -and $app) { break }
+              }
+              if (!$app -or !$authorize) { throw 'Connected curl did not appear before administrator approval.' }
+              Write-Host 'Connected curl visible under the basic user token with elevation available.'
+          } finally {
+              if ($p -and !$p.HasExited) { $p.Kill(); $p.WaitForExit() }
+              if (!$curl.HasExited) { $curl.Kill() }
+          }
+          $id = [Guid]::NewGuid().ToString('N')
+          $pipe = [IO.Pipes.NamedPipeServerStream]::new("BlessedLine-$id",[IO.Pipes.PipeDirection]::In,1,[IO.Pipes.PipeTransmissionMode]::Byte,[IO.Pipes.PipeOptions]::Asynchronous)
+          try {
+              $worker = Start-Process $exe -ArgumentList @('--traffic',$id,$PID) -PassThru
+              if (!$pipe.WaitForConnectionAsync().Wait(12000)) { throw 'Helper did not connect.' }
+              $reader = [IO.StreamReader]::new($pipe)
+              $bytes = 0
+              for ($i=0;$i -lt 12;$i++) {
+                  $null = Invoke-WebRequest $uri
+                  $line = $reader.ReadLineAsync()
+                  if (!$line.Wait(4000) -or !$line.Result) { throw 'Helper exited without measurements.' }
+                  $batch = $line.Result | ConvertFrom-Json
+                  $bytes += ($batch.Traffic | Where-Object Path -like '*\pwsh.exe' | Measure-Object -Property Received -Sum).Sum
+                  if ($bytes -gt 0) { break }
+              }
+              if ($bytes -le 0) { throw 'No PowerShell download bytes from the helper.' }
+              Write-Host "Helper reported $bytes received bytes."
+          } finally {
+              $pipe.Dispose()
+              if ($worker -and !$worker.WaitForExit(5000)) { $worker.Kill(); throw 'Helper did not exit on pipe close.' }
           }
