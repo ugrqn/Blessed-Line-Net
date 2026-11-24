@@ -1,5 +1,23 @@
 # Doğrulama kaydı
 
+## BlessedLine 0.6.0
+
+Windows Server 2025 üzerinde 23 çekirdek testi ve 32 uygulama kontrolü çalıştı. Gerçek indirmede veri kotasının seçili EXE’nin bağlantısını kestiği, başka bir işlemin internet erişiminin sürdüğü ve satırdaki kilitle bağlantının geri açıldığı doğrulandı. Sıfırlama, BlessedLine’ın güvenlik duvarı ve QoS kurallarını temizledi. İlgisiz test kuralı korundu. [Windows kaynak testi](https://github.com/ugrqn/Blessed-Line-Net/actions/runs/45408926770)
+
+Çift tıklamayla açılan canlı grafik, favori kaydı ve sıralaması, trafik renklerinin kapatılması, ping alanı ve Wi-Fi bilgi ekranı denetlendi. QoS yükleme kuralının Windows’a doğru EXE yolu ve 1.500 kbit/sn değeriyle yazıldığı görüldü. QoS doğrulaması kural kaydını kapsadı. Wi-Fi doğrulaması çalıştırıcıda ekran ve tarama denetimleriyle sınırlıydı. Fiziksel radyo, yakın ağ sinyali ve yeniden bağlanma için fiziksel bir Wi-Fi bağdaştırıcısı gerekir.
+
+İndirilen x64 ve x86 arşivlerine aynı 32 kontrol uygulandı. Ayrıca Windows başlangıcı, tepsi ve küçük panel, Aero başlık köşesi, kota uyarıları, iki gerçek sürece veri atfı, standart kullanıcı yardımcısı ve 11 dilde açılış geçti. x86 paketi Windows’un 32 bit uyumluluk katmanında çalıştırıldı. [Windows paket testi](https://github.com/ugrqn/Blessed-Line-Net/actions/runs/45409549648)
+
+| Çalışma kümesi | Windows x64 | Windows x86 |
+|---|---:|---:|
+| Ana pencere ve ayrı yetki yardımcısı, örneklenen en yüksek toplam | 97,97 MiB | 97,99 MiB |
+| Tepsi, otomatik uygulama ölçümü açık | 71,8 MiB | 66,8 MiB |
+| Tepsi, uygulama ölçümü kapalı | 65,0 MiB | 56,2 MiB |
+
+Ana pencere ve yardımcı için 25 örnek 100 ms arayla alındı. Tepsi değerleri üç ölçümün ortancasıdır. Windows kural yazımında kısa süreli ayrı bir PowerShell işlemi çalışır.
+
+İki Windows arşivi 7-Zip bütünlük testini geçti. GitHub Releases’ten indirilen arşiv ve indirme kartlarının SHA-256 değerleri yerel dosyalarla eşleşti. EXE Authenticode sonucu `NotSigned`. [Sürüm ve SHA-256 listesi](https://github.com/ugrqn/Blessed-Line-Net/releases/tag/v0.6.0-preview)
+
 ## BlessedLine 0.5.0
 
 Windows paket testleri Win7 başlığının sol üst pikselini, otomatik ölçümle canlı süreç trafiğini, Windows başlangıç kaydını ve standart kullanıcı yardımcı kanalını kontrol etti. Tepsi modunda erken uyarı ve kota doldu pencerelerinin üstte olduğu doğrulandı. +200 MB ile seçili kota arttı, devam et seçimi pencereyi kapattı ve 150 MB uyarı payı formdan kaydedildi. 23 çekirdek testi geçti. [Windows paket testi](https://github.com/ugrqn/Blessed-Line-Net/actions/runs/45393548644)
