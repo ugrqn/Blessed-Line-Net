@@ -1,12 +1,12 @@
 # BlessedLine
 
-[Türkçe](../README.md) · [Release notes](https://github.com/ugrqn/Blessed-Line-Net/releases/tag/v0.6.0-preview)
+[Türkçe](../README.md) · [Release notes](https://github.com/ugrqn/Blessed-Line-Net/releases/tag/v0.6.1-preview)
 
 ## Download
 
 | Windows 64-bit | Windows 32-bit | Linux |
 | :--- | :--- | :--- |
-| **[Download x64](https://github.com/ugrqn/Blessed-Line-Net/releases/download/v0.6.0-preview/BlessedLine-0.6.0-win-x64.7z)** | **[Download x86](https://github.com/ugrqn/Blessed-Line-Net/releases/download/v0.6.0-preview/BlessedLine-0.6.0-win-x86.7z)** | **[Download Linux preview](https://github.com/ugrqn/Blessed-Line-Net/releases/download/v0.4.0-preview/BlessedLine-0.4.0-linux.tar.gz)** |
+| **[Download x64](https://github.com/ugrqn/Blessed-Line-Net/releases/download/v0.6.1-preview/BlessedLine-0.6.1-win-x64.7z)** | **[Download x86](https://github.com/ugrqn/Blessed-Line-Net/releases/download/v0.6.1-preview/BlessedLine-0.6.1-win-x86.7z)** | **[Download Linux preview](https://github.com/ugrqn/Blessed-Line-Net/releases/download/v0.6.1-preview/BlessedLine-0.6.1-linux.tar.gz)** |
 
 On Windows, exit the previous version from the notification area, extract the archive and open `BlessedLine.exe`. After the first run, BlessedLine starts in the notification area when you sign in. Disable this from **Start with Windows** in **Settings**. On Debian or Ubuntu, the Linux preview uses Python 3 and Tk. [Linux instructions](../src/BlessedLine.Linux/README.md)
 
@@ -18,4 +18,4 @@ On Windows, exit the previous version from the notification area, extract the ar
 
 
 - Double-click an application for live traffic, a transfer quota and its Windows QoS upload cap. The row icon toggles Internet access. Right-click to pin favorites and use Settings to toggle traffic colors.
-- Ping shows round-trip latency to 1.1.1.1. The Wi-Fi panel shows connection and nearby network details when Windows supplies them.
+- Ping shows round-trip latency to the selected connection’s local gateway. The Wi-Fi panel shows connection and nearby network details when Windows supplies them.

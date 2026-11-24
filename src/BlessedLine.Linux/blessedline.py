@@ -380,7 +380,7 @@ class Monitor:
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--version", action="version", version="BlessedLine 0.4.0 (Linux preview)")
+    parser.add_argument("--version", action="version", version="BlessedLine 0.6.1 (Linux preview)")
     parser.parse_args()
     STATE_DIR.mkdir(mode=0o700, parents=True, exist_ok=True)
     if STATE_DIR.is_symlink() or STATE_DIR.stat().st_uid != os.getuid():
