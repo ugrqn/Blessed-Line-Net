@@ -73,7 +73,7 @@ public partial class App : Application
         _policies.Failed += message => _tray.Notify(message);
         _wifi = new WifiControl(_settings, _store, _meter, ReportWifi);
         _notifications = new QuotaNotifications(_settings, () => _wifi.CanCut, ApplyQuotaAction);
-        if (_settings.AutoMeasureApplications)
+        if (_settings.AutoMeasureApplications || _policies.HasByteBudgets)
             Dispatcher.BeginInvoke(_traffic.Start);
         if (startInTray)
             _monitor = new TrayMonitor(_settings, _store, _meter, _tray, _notifications, _wifi, _policies);

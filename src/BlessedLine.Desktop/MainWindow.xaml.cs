@@ -752,7 +752,7 @@ public partial class MainWindow : Window
         if (!_ready) return;
         _settings.AutoMeasureApplications = AutoMeasureCheck.IsChecked == true;
         if (_settings.AutoMeasureApplications) _measurement.Start();
-        else
+        else if (!_policies.HasByteBudgets)
         {
             _measurement.Stop();
             _measureStatus = "ConnectionsOnly";

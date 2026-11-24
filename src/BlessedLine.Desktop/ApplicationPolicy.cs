@@ -1,3 +1,4 @@
+using System.Buffers;
 using System.ComponentModel;
 using System.Diagnostics;
 using System.Globalization;
@@ -29,6 +30,7 @@ internal static class ApplicationPolicy
 {
     private const string Group = "BlessedLine.AppControls";
     internal const long MaximumUploadKbps = 10_000_000;
+    private static readonly SearchValues<char> InvalidPathSyntax = SearchValues.Create("<>:\"/|?*");
     private static readonly HashSet<string> SharedHosts = new(StringComparer.OrdinalIgnoreCase)
     {
         "svchost.exe", "System", "lsass.exe", "services.exe", "winlogon.exe", "csrss.exe", "smss.exe",
@@ -39,7 +41,8 @@ internal static class ApplicationPolicy
     internal static bool IsControllable(string? path)
     {
         if (string.IsNullOrWhiteSpace(path) || path.Length is < 8 or > 1024 ||
-            !char.IsAsciiLetter(path[0]) || path[1] != ':' || path[2] != '\\' || !Path.IsPathFullyQualified(path)) return false;
+            !char.IsAsciiLetter(path[0]) || path[1] != ':' || path[2] != '\\' ||
+            path.AsSpan(3).ContainsAny(InvalidPathSyntax) || !Path.IsPathFullyQualified(path)) return false;
         try
         {
             return string.Equals(Path.GetFullPath(path), path, StringComparison.OrdinalIgnoreCase) &&
@@ -80,7 +83,7 @@ internal static class ApplicationPolicy
             return new(true);
         }
         catch (Exception ex) when (ex is COMException or Win32Exception or UnauthorizedAccessException or IOException or
-                                   InvalidOperationException or NotSupportedException or System.Reflection.TargetInvocationException or
+                                   InvalidOperationException or NotSupportedException or TargetInvocationException or
                                    Microsoft.CSharp.RuntimeBinder.RuntimeBinderException)
         {
             var cause = ex is TargetInvocationException { InnerException: { } inner } ? inner : ex;

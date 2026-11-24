@@ -59,7 +59,12 @@ internal sealed class AppPolicyController(WindowStateData state, SettingsStore s
         try
         {
             var rule = Find(path) ?? new AppPolicyRule();
-            if (rule.QuotaBytes == bytes) return new(true);
+            if (rule.QuotaBytes == bytes)
+            {
+                if (bytes > 0 && measurement.CanStart) measurement.Start();
+                _queries.Remove(path);
+                return new(true);
+            }
             if (rule.BudgetBlocked && !rule.Blocked)
             {
                 var result = await measurement.ApplyPolicyAsync(new(PolicyOperation.Block, path, 0));
