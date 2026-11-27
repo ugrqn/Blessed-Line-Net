@@ -1,0 +1,127 @@
+name: Refresh Windows screenshots
+
+on:
+  release:
+    types: [published]
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: Published release tag
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+concurrency:
+  group: windows-screenshot-gallery
+  cancel-in-progress: false
+
+jobs:
+  capture:
+    runs-on: windows-2025
+    timeout-minutes: 8
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          ref: ${{ github.event.repository.default_branch }}
+          persist-credentials: false
+      - name: Download and verify the published Windows package
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RELEASE_TAG: ${{ github.event.release.tag_name || inputs.tag }}
+        run: |
+          if ($env:RELEASE_TAG -notmatch '^v([0-9]+\.[0-9]+\.[0-9]+)(-preview)?$') {
+              throw 'Expected a BlessedLine version tag, such as v0.6.2-preview.'
+          }
+          $version = $Matches[1]
+          $draft = gh release view $env:RELEASE_TAG --repo $env:GITHUB_REPOSITORY --json isDraft --jq '.isDraft'
+          if ($LASTEXITCODE -ne 0 -or $draft -ne 'false') { throw 'A published release is required.' }
+          $archive = "BlessedLine-$version-win-x64.7z"
+          $manifest = "BlessedLine-$version-SHA256SUMS.txt"
+          gh release download $env:RELEASE_TAG --repo $env:GITHUB_REPOSITORY --pattern $archive --pattern $manifest --dir package
+          if ($LASTEXITCODE -ne 0) { throw 'Could not download the release package and checksum.' }
+          $pattern = '^([0-9a-fA-F]{64})  ' + [regex]::Escape($archive) + '$'
+          $entry = @(Get-Content "package/$manifest" | Where-Object { $_ -match $pattern })
+          if ($entry.Count -ne 1 -or $entry[0] -notmatch $pattern) { throw 'No unique x64 checksum in the manifest.' }
+          if ((Get-FileHash "package/$archive" -Algorithm SHA256).Hash -ine $Matches[1]) { throw 'Package checksum mismatch.' }
+          7z x "package/$archive" -oportable
+          if ($LASTEXITCODE -ne 0) { throw 'Windows package extraction failed.' }
+      - name: Capture the app windows
+        shell: pwsh
+        env:
+          RELEASE_TAG: ${{ github.event.release.tag_name || inputs.tag }}
+        run: |
+          ./tests/windows/capture-gallery.ps1 -Executable 'portable/BlessedLine/BlessedLine.exe' -OutputDirectory gallery
+          Set-Content -LiteralPath gallery/version.txt -Value $env:RELEASE_TAG -Encoding utf8NoBOM
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: windows-gallery
+          path: gallery/
+          if-no-files-found: error
+          retention-days: 10
+
+  publish:
+    needs: capture
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: write
+    env:
+      DEFAULT_BRANCH: ${{ github.event.repository.default_branch }}
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          ref: ${{ github.event.repository.default_branch }}
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
+        with:
+          name: windows-gallery
+          path: generated-gallery
+      - name: Update the GitHub README images
+        run: |
+          set -euo pipefail
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+
+          # Keep the newest gallery if an older release is captured manually.
+          for attempt in 1 2 3; do
+            git fetch origin "refs/heads/$DEFAULT_BRANCH"
+            git checkout --detach FETCH_HEAD
+            result=0
+            python3 - <<'PY' || result=$?
+          import re
+          import struct
+          import sys
+          from pathlib import Path
+
+          def version(path):
+              match = re.fullmatch(r"v(\d+)\.(\d+)\.(\d+)(-preview)?", path.read_text().strip())
+              if not match:
+                  raise ValueError("Invalid gallery release tag")
+              return (*(int(item) for item in match.groups()[:3]), match[4] is None)
+
+          images = ("aero-dashboard", "xp-dashboard", "mini-panel", "application-details", "quota-warning")
+          generated = Path("generated-gallery")
+          current = Path("docs/gallery")
+          for name in images:
+              data = (generated / f"{name}.png").read_bytes()
+              width, height = struct.unpack_from(">II", data, 16)
+              if data[:8] != b"\x89PNG\r\n\x1a\n" or not (180 <= width <= 2000 and 75 <= height <= 1600):
+                  raise ValueError(f"Invalid screenshot {name}")
+          published = current / "version.txt"
+          if published.exists() and version(published) > version(generated / "version.txt"):
+              sys.exit(10)
+          current.mkdir(parents=True, exist_ok=True)
+          for file in [f"{name}.png" for name in images] + ["version.txt"]:
+              (current / file).write_bytes((generated / file).read_bytes())
+          PY
+            if [[ "$result" == 10 ]]; then exit 0; fi
+            if [[ "$result" != 0 ]]; then exit "$result"; fi
+            git add -- docs/gallery
+            if git diff --cached --quiet; then exit 0; fi
+            tag=$(tr -d '\r\n' < generated-gallery/version.txt)
+            git commit -m "Refresh Windows screenshots for $tag"
+            if git push origin "HEAD:refs/heads/$DEFAULT_BRANCH"; then exit 0; fi
+          done
+          exit 1
