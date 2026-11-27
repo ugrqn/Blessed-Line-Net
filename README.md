@@ -13,6 +13,24 @@ BlessedLine, Windows ve Linux için internet kullanımı ve kota sayacıdır. An
 
 Windows’ta eski sürüm açıksa bildirim alanındaki simgeden **Çıkış**’ı seç. Yeni arşivi ayıkla ve `BlessedLine.exe` dosyasını aç. İlk açılışta **Windows ile başlat** seçeneği etkindir. Oturum açıldığında sayaç tepside çalışır. Windows’un Başlangıç Uygulamaları listesinde **BlessedLine** adı ve program simgesi kullanılır. Ana pencereyi tepsi simgesinden açabilir, otomatik başlatmayı **Ayarlar** bölümünden kapatabilirsin. Linux paketinde Python 3 ve Tk gerekir. [Linux kullanım bilgileri](src/BlessedLine.Linux/README.md)
 
+## Ekran görüntüleri
+
+| Windows 7 Aero | XP Klasik |
+| :---: | :---: |
+| [![BlessedLine ana ekranı, Windows 7 Aero teması](docs/gallery/aero-dashboard.png)](docs/gallery/aero-dashboard.png) | [![BlessedLine ana ekranı, XP Klasik teması](docs/gallery/xp-dashboard.png)](docs/gallery/xp-dashboard.png) |
+| Kota, bağlantı hızı ve uygulama trafiği. | Ayarlar’dan seçilebilen klasik görünüm. |
+
+| Uygulama ayrıntıları | Kota uyarısı |
+| :---: | :---: |
+| [![BlessedLine uygulama ayrıntılarında grafik ve kota ayarları](docs/gallery/application-details.png)](docs/gallery/application-details.png) | [![BlessedLine kota uyarısı ve devam etme seçenekleri](docs/gallery/quota-warning.png)](docs/gallery/quota-warning.png) |
+| Uygulamaya çift tıklayarak canlı grafiği ve sınırları aç. | Kotaya yaklaşınca kalan veriyi gör ve limit ekle. |
+
+**Küçük panel** ekranın köşesinde hızı ve kalan kotayı gösterir.
+
+[![BlessedLine küçük paneli](docs/gallery/mini-panel.png)](docs/gallery/mini-panel.png)
+
+Görseller, örnek bir sayaçla çalışan Windows sürümünden alınır ve yeni Windows sürümlerinde otomatik yenilenir. [Görsellerin sürümü](docs/gallery/version.txt) · [Galeri iş akışı](.github/workflows/gallery.yml)
+
 ## Uygulamalar ve sayaçlar
 
 - **Uygulamalar** açıkken etkin TCP bağlantısı olan programlar otomatik listelenir. Bir programı görmek için o programda bir sayfa aç veya indirme başlat. Windows’un verdiği dosya ya da uygulama paketi simgesi, kısa adın yanında görünür. Simge okunamıyorsa Windows’un genel uygulama simgesi kullanılır.
